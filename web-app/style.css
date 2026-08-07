@@ -347,9 +347,11 @@ a{color:inherit;}
 .meter{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);
   padding:12px 14px;position:relative;
+  transition:border-color var(--dur-fast) var(--ease-out);
+}
+.meter-anim .meter{
   opacity:0;transform:translateY(6px);
   animation:enter var(--dur-lg) var(--ease-out) forwards;
-  transition:border-color var(--dur-fast) var(--ease-out);
 }
 .meter:hover{border-color:var(--muted-2);}
 .meter::before{
@@ -407,8 +409,10 @@ tbody td{
   padding:9px 14px;border-bottom:1px solid var(--border-soft);vertical-align:middle;color:var(--text);
 }
 tbody tr{
-  opacity:0;transform:translateY(3px);animation:enter var(--dur-med) var(--ease-out) forwards;
   transition:background-color var(--dur-fast) var(--ease-out);user-select:none;
+}
+.table-anim tbody tr{
+  opacity:0;transform:translateY(3px);animation:enter var(--dur-med) var(--ease-out) forwards;
 }
 tbody tr:hover{background:var(--card-hover);}
 tbody tr.sel{background:var(--accent-soft);}

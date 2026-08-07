@@ -1624,7 +1624,15 @@
     return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="account-link-icon" title="${platform} ${username}" onclick="event.stopPropagation()">${platformIcon(platform)}<span class="account-link-username">${escapeHtml(username || url.replace(/https?:\/\//,"").replace(/\/$/,""))}</span></a>`;
   }
 
+  const enterAnimOnce = {};
+  function toggleEnterAnim(el, key, cls) {
+    if (!el) return;
+    if (!enterAnimOnce[key]) { enterAnimOnce[key] = true; el.classList.add(cls); }
+    else el.classList.remove(cls);
+  }
+
   function renderMeters() {
+    toggleEnterAnim(metersEl, "meter", "meter-anim");
     const entries = dateScopedEntries();
     const total = entries.length;
     const totalQty = entries.reduce((s, e) => s + (Number(e.job.jumlah) || 1), 0);
@@ -1796,6 +1804,7 @@
     });
   }
   function renderTable() {
+    toggleEnterAnim(tableWrapEl, "table", "table-anim");
     if (state.filters.workerId) {
       renderWorkerWorkPanel(state.filters.workerId);
       return;
