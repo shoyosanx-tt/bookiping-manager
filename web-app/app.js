@@ -527,7 +527,7 @@
     }
   };
 
-  let settings = { lang: "en", currency: "USD", hideMoney: true, theme: "light" };
+  let settings = { lang: "en", currency: "USD", hideMoney: true, theme: "dark" };
   let exchangeRates = null;
   let rateCacheTime = 0;
 
@@ -571,9 +571,10 @@
     selectedClientIds: new Set(),
     batchOnly: false,
     allJobs: true,
+    pendingOnly: true,
     notedOnly: false,
     search: "",
-    filters: { worker: "", due: "", post: "", paid: "", workerPaid: "", sortBy: "urgent" },
+    filters: { worker: "", workerId: "", due: "", post: "", paid: "", workerPaid: "", sortBy: "urgent" },
     filterMonth: "",
     filterYear: "",
     selectedJobIds: new Set(),
@@ -930,8 +931,14 @@
   }
   function allWorkers() {
     const set = new Set();
-    for (const { job } of allJobsFlat()) if (job.worker) set.add(job.worker);
-    for (const w of state.workers) if (w.name) set.add(w.name);
+    for (const { job } of allJobsFlat()) {
+      if (job.workerId) {
+        const w = state.workers.find(x => x.id === job.workerId);
+        if (w && w.name) set.add(w.name);
+      } else if (job.worker) {
+        set.add(job.worker);
+      }
+    }
     return [...set].sort();
   }
 
@@ -990,7 +997,7 @@
     }
     state.workers.forEach(w => {
       const div = document.createElement('div');
-      div.className = 'worker-item';
+      div.className = 'worker-item' + (state.filters.workerId === w.id ? ' active' : '');
       const prog = workerProgress(w.id);
       div.innerHTML = `
         <span class="worker-name">${escapeHtml(w.name)}</span>
@@ -998,7 +1005,15 @@
         <button class="worker-link-btn" data-wid="${w.id}" title="${_("copyLinkTitle")}">${_("link")}</button>`;
       div.addEventListener('click', e => {
         if (e.target.closest('.worker-link-btn')) return;
-        showWorkerDetail(w.id);
+        state.filters.workerId = w.id;
+        state.filters.worker = w.name;
+        const ws = $("#filterWorker");
+        if (ws) ws.value = w.name;
+        state.allJobs = true;
+        state.pendingOnly = false;
+        state.selectedClientIds = new Set();
+        state.selectedJobIds = new Set();
+        renderAll();
       });
       div.querySelector('.worker-link-btn').addEventListener('click', e => {
         e.stopPropagation();
@@ -1217,6 +1232,7 @@
       body.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted-2);font-size:13px">' + _("noLinksPosted") + '</div>';
     } else {
       var html = '<div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 16px">';
+      var clientCount = new Set(items.map(function(it) { return it.client ? it.client.id : null; })).size;
       var idx = 0;
       items.forEach(function(it) {
         var job = it.job, client = it.client;
@@ -1228,7 +1244,7 @@
         if (urls.length === 0) return;
         idx++;
         html += '<div style="font-family:monospace;font-size:13px;margin-bottom:6px;color:var(--accent);font-weight:600">' + escapeHtml(idx + '. ' + (job.songTitle || _("untitled"))) + '</div>';
-        if (state.selectedClientIds.size === 0 && state.selectedJobIds.size > 0) {
+        if (clientCount > 1) {
           html += '<div style="font-family:monospace;font-size:11px;padding:0 0 2px 24px;color:var(--muted-2)">' + escapeHtml(client.name) + '</div>';
         }
         urls.forEach(function(u) {
@@ -1349,8 +1365,10 @@
     const q = state.search.trim().toLowerCase();
     const f = state.filters;
     return dateScopedEntries().filter(({ client, job }) => {
+      if (state.allJobs && state.pendingOnly && linkQtySum(job.links || []) >= (job.jumlah || 1)) return false;
       if (state.notedOnly && !(job.note && job.note.trim())) return false;
       if (state.batchOnly && !((job.batch || "").trim())) return false;
+      if (f.workerId && job.workerId !== f.workerId) return false;
       if (f.worker && job.worker !== f.worker) return false;
       if (f.due) {
         const d = daysUntil(job.deadline);
@@ -1385,8 +1403,8 @@
         const db = Math.abs(daysUntil(b.job.deadline) ?? Infinity);
         return da - db || (a.job.no ?? 0) - (b.job.no ?? 0);
       }
-      if (sort === "newest") return jobDeadlineTime(b.job) - jobDeadlineTime(a.job) || (b.job.no ?? 0) - (a.job.no ?? 0);
-      if (sort === "oldest") return jobDeadlineTime(a.job) - jobDeadlineTime(b.job) || (a.job.no ?? 0) - (b.job.no ?? 0);
+      if (sort === "newest") return (b.job.createdAt || 0) - (a.job.createdAt || 0) || (b.job.no ?? 0) - (a.job.no ?? 0);
+      if (sort === "oldest") return (a.job.createdAt || 0) - (b.job.createdAt || 0) || (a.job.no ?? 0) - (b.job.no ?? 0);
       if (sort === "az") return a.client.name.localeCompare(b.client.name) || (a.job.no ?? 0) - (b.job.no ?? 0);
       if (sort === "za") return b.client.name.localeCompare(a.client.name) || (a.job.no ?? 0) - (b.job.no ?? 0);
       return (a.client.name.localeCompare(b.client.name)) || ((a.job.no ?? 0) - (b.job.no ?? 0));
@@ -1449,6 +1467,27 @@
 
   function renderClientList() {
     clientListEl.innerHTML = "";
+    const allItem = document.createElement("div");
+    allItem.className = "client-item all-client-item" + (state.allJobs ? " active" : "");
+    allItem.dataset.clientId = "";
+    allItem.innerHTML = `<span class="client-name">${_("allClient")}</span><span class="client-count">${state.clients.reduce((n, c) => n + c.jobs.length, 0)}</span>`;
+    allItem.addEventListener("click", (e) => {
+      e.preventDefault();
+      state.allJobs = true;
+      state.batchOnly = false;
+      state.pendingOnly = false;
+      state.selectedClientIds = new Set();
+      state.selectedJobIds = new Set();
+      state.clientShiftAnchor = null;
+      state.filters.workerId = "";
+      state.filters.worker = "";
+      state.filters.sortBy = "newest";
+      const sortSel = $("#sortBy");
+      if (sortSel) sortSel.value = "newest";
+      renderAll();
+      window.autoHideSidebar?.(1250);
+    });
+    clientListEl.appendChild(allItem);
     const sortedClients = [...state.clients].sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { numeric: true }));
     for (const c of sortedClients) {
       const item = document.createElement("div");
@@ -1530,15 +1569,10 @@
     const jobsItem = document.createElement("div");
     jobsItem.className = "client-item" + (state.allJobs ? " active" : "");
     jobsItem.dataset.clientId = "";
-    jobsItem.innerHTML = `<span class="client-name">${_("allJobs")}</span><span class="client-count">${state.clients.reduce((n, c) => n + c.jobs.length, 0)}</span>`;
-    jobsItem.addEventListener("click", () => { state.allJobs = true; state.batchOnly = false; state.selectedClientIds = new Set(); state.selectedJobIds = new Set(); state.clientShiftAnchor = null; renderAll(); window.autoHideSidebar?.(1250); });
+    const pendingCount = state.clients.reduce((n, c) => n + c.jobs.filter(j => linkQtySum(j.links || []) < (j.jumlah || 1)).length, 0);
+    jobsItem.innerHTML = `<span class="client-name">${_("allJobs")}</span><span class="client-count">${pendingCount}</span>`;
+    jobsItem.addEventListener("click", () => { state.allJobs = true; state.batchOnly = false; state.pendingOnly = true; state.selectedClientIds = new Set(); state.selectedJobIds = new Set(); state.clientShiftAnchor = null; state.filters.workerId = ""; state.filters.worker = ""; renderAll(); window.autoHideSidebar?.(1250); });
     el.appendChild(jobsItem);
-    const batchItem = document.createElement("div");
-    batchItem.className = "client-item" + (state.batchOnly ? " active" : "");
-    batchItem.dataset.clientId = "";
-    batchItem.innerHTML = `<span class="client-name">${_("batch")}</span><span class="client-count">${state.clients.reduce((n, c) => n + c.jobs.filter(j => ((j.batch || "").trim())).length, 0)}</span>`;
-    batchItem.addEventListener("click", () => { state.batchOnly = true; state.allJobs = false; state.selectedClientIds = new Set(); state.selectedJobIds = new Set(); state.clientShiftAnchor = null; renderAll(); window.autoHideSidebar?.(1250); });
-    el.appendChild(batchItem);
   }
 
   function detectPlatform(url) {
@@ -1688,7 +1722,84 @@
           </td>
         </tr>`;
   }
+  function renderWorkerWorkPanel(workerId) {
+    const w = getWorker(workerId);
+    const name = w ? w.name : workerId;
+    const jobs = [];
+    for (const c of state.clients) for (const j of c.jobs) if (j.workerId === workerId) jobs.push({ client: c, job: j });
+    filterTitleEl.textContent = name + ' \u00B7 ' + jobs.length + ' ' + _("job");
+    const socialEl = $("#filterSocial");
+    if (socialEl) socialEl.innerHTML = "";
+    if (jobs.length === 0) {
+      tableWrapEl.innerHTML = `<div class="empty-state"><h3>${_("noTasks")}</h3><p>${_("noMatchDesc")}</p></div>`;
+      return;
+    }
+    let totalSent = 0, totalTarget = 0, doneCount = 0;
+    const rows = jobs.map(({client, job}) => {
+      const wlinks = job.workerLinks || [];
+      const sentCount = wlinks.filter(Boolean).length;
+      const wkQty2 = job.workerQty || 1;
+      totalSent += sentCount; totalTarget += wkQty2;
+      if (job.workerDone) doneCount++;
+      const linksCell = sentCount > 0
+        ? `<button class="view-worker-links-btn btn btn-ghost btn-sm" data-job-id="${job.id}" data-song="${escapeAttr(job.songTitle || '')}">${_("viewLinks")} (${sentCount})</button>`
+        : `<span class="dash">\u2014</span>`;
+      const statusBadge = job.workerDone
+        ? `<span class="badge ok">${_("done")}</span>`
+        : `<span class="badge warn">${_("pending")}</span>`;
+      return `<tr data-job-id="${job.id}">
+        <td class="cell-client" title="${escapeAttr(client.name)}">${escapeHtml(client.name)}</td>
+        <td class="cell-song" title="${escapeAttr(job.songTitle)}">${escapeHtml(job.songTitle || "\u2014")}</td>
+        <td class="cell-num">${job.jumlah || 1}</td>
+        <td class="cell-num">${wkQty2}</td>
+        <td class="cell-links"><span class="links-count">${sentCount}/${wkQty2}</span>${linksCell}</td>
+        <td>${badge(deadlineLabel(job.deadline), deadlineKind(job.deadline))}</td>
+        <td>${statusBadge}</td>
+        <td class="cell-action"><button class="worker-done-btn${job.workerDone ? ' on' : ''}" data-job-id="${job.id}">${job.workerDone ? _("undo") : _("done")}</button></td>
+      </tr>`;
+    }).join('');
+    const initials = (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase() || "?";
+    tableWrapEl.innerHTML = `
+      <div class="worker-work-panel">
+        <div class="worker-work-head">
+          <div class="worker-work-id">
+            <div class="worker-work-avatar">${escapeHtml(initials)}</div>
+            <div>
+              <div class="worker-work-name">${escapeHtml(name)}</div>
+              <div class="worker-work-sub">${jobs.length} ${_("job")} \u00B7 ${_("linksSent")} ${totalSent}/${totalTarget} \u00B7 ${_("done")} ${doneCount}/${jobs.length}</div>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm worker-work-link" data-wid="${escapeAttr(workerId)}" title="${_("copyLinkTitle")}">${_("link")}</button>
+        </div>
+        <div class="worker-work-scroll">
+          <table>
+            <thead><tr>
+              <th>${_("client")}</th><th>${_("song")}</th><th class="cell-num">${_("qty")}</th><th class="cell-num">${_("wkQty")}</th><th>${_("linksSent")}</th><th>${_("due")}</th><th>${_("status")}</th><th class="cell-action">${_("done")}</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    tableWrapEl.querySelector('.worker-work-link')?.addEventListener('click', () => copyWorkerLink(workerId));
+    tableWrapEl.querySelectorAll('.worker-done-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const e2 = findJobEntry(btn.dataset.jobId);
+        if (e2) { e2.job.workerDone = !e2.job.workerDone; save(); renderAll(); }
+      });
+    });
+    tableWrapEl.querySelectorAll('.view-worker-links-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const jobId2 = btn.dataset.jobId;
+        const song = btn.dataset.song || _("untitled");
+        showWorkerLinksPopup(jobId2, song);
+      });
+    });
+  }
   function renderTable() {
+    if (state.filters.workerId) {
+      renderWorkerWorkPanel(state.filters.workerId);
+      return;
+    }
     const entries = visibleEntries();
     let title = state.notedOnly ? _("noted") : state.allJobs ? _("allJobs") : state.batchOnly ? _("batch") : state.selectedClientIds.size === 1 ? (findClient(state.selectedClientIds.values().next().value)?.name || _("client")) : state.selectedClientIds.size > 1 ? _("multipleClients") : _("allClient");
     if (state.filterYear) {
@@ -1738,6 +1849,11 @@
       // All Jobs: flat list, no batch headers. All Clients with selection: summary header + flat list.
       if (!state.allJobs) {
         rowHtml += `<tr class="batch-header sel-header"><td colspan="14">${selectionHeaderHtml()}</td></tr>`;
+      } else {
+        const anyPosted = entries.some(({ job }) => { const wl = job.workerLinks || []; const al = job.links || []; return wl.some(Boolean) || al.length > 0; });
+        if (anyPosted) {
+          rowHtml += `<tr class="batch-header sel-header"><td colspan="14"><div class="batch-header-inner"><span><button class="view-all-ad-report-btn badge warn" style="cursor:pointer;font-size:11px">${_("clientAdReport")}</button><span class="batch-count">${entries.length} ${_("job")}</span></span></div></td></tr>`;
+        }
       }
       entries.forEach(({ client, job }) => {
         globalIdx++;
@@ -1938,6 +2054,10 @@
     // view posted batch links
     tableWrapEl.querySelectorAll('.view-batch-posted-btn').forEach(btn => {
       btn.addEventListener('click', e => { e.stopPropagation(); showBatchLinksPopup(btn.dataset.key, btn.dataset.client); });
+    });
+    // view all-jobs ad report (All Client view)
+    tableWrapEl.querySelectorAll('.view-all-ad-report-btn').forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); showLinksReportPopup(entries, _("clientAdReport")); });
     });
     // edit batch price — handled via delegated listener on tableWrapEl
     // view selected jobs ad report (All Clients)
@@ -2563,7 +2683,8 @@
     if (editingJobId || dupSource) return;
     const clientId = $("#jobClient").value;
     if (!clientId) return;
-    fill("jobBatch", nextBatchFor(clientId));
+    const batchEl = $("#jobBatch");
+    if (batchEl) batchEl.value = nextBatchFor(clientId);
   }
   $("#jobClient").addEventListener("change", autoBatchForNew);
 
@@ -2884,6 +3005,10 @@
     $("#" + id).addEventListener("change", (e) => {
       const key = { filterWorker: "worker", filterDue: "due", filterPost: "post", filterPaid: "paid", filterWorkerPaid: "workerPaid" }[id];
       state.filters[key] = e.target.value;
+      if (id === "filterWorker") {
+        const w = state.workers.find(x => x.name === e.target.value);
+        state.filters.workerId = w ? w.id : "";
+      }
       renderTable();
     });
   });
@@ -3617,6 +3742,16 @@
     autoHideSidebar();
     window.addEventListener("resize", () => autoHideSidebar());
     window.autoHideSidebar = autoHideSidebar;
+    // auto-hide sidebar ketika pengguna beraktivitas di area halaman utama
+    const mainEl = document.querySelector(".main");
+    if (mainEl) {
+      mainEl.addEventListener("click", () => {
+        if (sidebarWrap && !sidebarWrap.classList.contains("collapsed")) {
+          sidebarWrap.classList.add("collapsed");
+          navRail?.classList.add("sidebar-closed");
+        }
+      });
+    }
     // manual toggle button
     $("#railToggle")?.addEventListener("click", (e) => { e.stopPropagation(); toggleSidebar(); });
   }
