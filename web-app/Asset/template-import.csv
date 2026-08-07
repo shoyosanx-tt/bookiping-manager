@@ -1,0 +1,4 @@
+Project,Client,No,Worker,Deadline,Song/Job Title,On Working,Song/Source Link,Post Status,Post Link,Paid Status,Price/Vid,Currency,Worker Paid,Worker Fee,Worker Fee Currency,Worker Note
+Ads Manager,Client A,1,Rina,2026-08-15,Judul Lagu 1,YES,https://sound.example.com/1,POSTED,https://post.example.com/1,PAID,15,USD,PAID,5,USD,Catatan opsional
+Ads Manager,Client A,2,Rina,2026-08-20,Judul Lagu 2,,https://sound.example.com/2,NOT YET,,NOT YET,20,USD,NOT YET,0,USD,
+Ads Manager,Client B,1,Ahmad,2026-08-10,Judul Lagu 3,YES,https://sound.example.com/3,POSTED,https://post.example.com/3,PAID,25,USD,NOT YET,8,USD,
