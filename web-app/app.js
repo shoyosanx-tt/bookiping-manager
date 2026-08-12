@@ -973,6 +973,12 @@
         if (j.workerId === id) { j.workerId = ''; j.worker = ''; }
       }
     }
+    if (state.filters.workerId === id) {
+      state.filters.workerId = "";
+      state.filters.worker = "";
+      const ws = $("#filterWorker");
+      if (ws) ws.value = "";
+    }
     save(); renderAll();
   }
   function workerProgress(workerId) {
@@ -1002,9 +1008,10 @@
       div.innerHTML = `
         <span class="worker-name">${escapeHtml(w.name)}</span>
         <span class="worker-badge" title="${_("sent")} ${prog.sent} / ${_("target")} ${prog.total}">${prog.sent}/${prog.total}</span>
-        <button class="worker-link-btn" data-wid="${w.id}" title="${_("copyLinkTitle")}">${_("link")}</button>`;
+        <button class="worker-link-btn" data-wid="${w.id}" title="${_("copyLinkTitle")}">${_("link")}</button>
+        <button class="worker-del-btn" data-wid="${w.id}" title="${_("deleteWorker")}" aria-label="${_("deleteWorker")}"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2.5 4.5h11M6.5 2.5h3M4 4.5l.8 9h6.4l.8-9M6.5 7v4M9.5 7v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>`;
       div.addEventListener('click', e => {
-        if (e.target.closest('.worker-link-btn')) return;
+        if (e.target.closest('.worker-link-btn') || e.target.closest('.worker-del-btn')) return;
         state.filters.workerId = w.id;
         state.filters.worker = w.name;
         const ws = $("#filterWorker");
@@ -1018,6 +1025,10 @@
       div.querySelector('.worker-link-btn').addEventListener('click', e => {
         e.stopPropagation();
         copyWorkerLink(w.id);
+      });
+      div.querySelector('.worker-del-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        confirmAction(_("confirmDeleteWorker").replace("{name}", w.name), () => deleteWorker(w.id));
       });
       list.appendChild(div);
     });

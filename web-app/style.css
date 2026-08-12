@@ -704,6 +704,8 @@ kbd{font:11px/1.4 var(--font-mono);background:var(--surface);padding:1px 5px;bor
 .worker-badge{font-size:10px;background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:99px;font-weight:600;}
 .worker-link-btn{font-size:10px;background:none;border:1px solid var(--border);color:var(--text-muted);padding:1px 8px;border-radius:99px;cursor:pointer;}
 .worker-link-btn:hover{color:var(--accent);border-color:var(--accent);}
+.worker-del-btn{display:inline-flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text-muted);padding:3px;border-radius:4px;cursor:pointer;opacity:.55;flex:none;}
+.worker-del-btn:hover{color:var(--danger);opacity:1;background:var(--danger-soft);}
 /* ============================================================
    Batch header
    ============================================================ */
