@@ -205,16 +205,60 @@
     });
   }
 
+  // True kalau dokumen tidak berisi data nyata (project kosong / tanpa client & job).
+  function isEmptyState(data) {
+    if (!data || !Array.isArray(data.projects)) return true;
+    for (var i = 0; i < data.projects.length; i++) {
+      var p = data.projects[i] || {};
+      var clients = Array.isArray(p.clients) ? p.clients : [];
+      if (!clients.length) continue;
+      for (var j = 0; j < clients.length; j++) {
+        var jobs = Array.isArray((clients[j] || {}).jobs) ? clients[j].jobs : [];
+        if (clients[j] && (clients[j].name || clients[j].accountLink || jobs.length)) return false;
+      }
+    }
+    return true;
+  }
+
+  // Simpan dengan deteksi konflik: hanya menimpa kalau data lokal LEBIH BARU dari server,
+  // dan menolak menimpa data yang ada dengan state kosong (penyebab data hilang).
   function saveCloudData(data) {
-    if (!currentUser || !firebaseReady || !db) return Promise.resolve();
+    if (!currentUser || !firebaseReady || !db) return Promise.resolve({ stale: false });
     data.writer = writerId;
     lastWritten = data.lastModified;
     setSync('saving');
-    return db.collection('users').doc(currentUser.uid).set(data).then(function () {
+    var docRef = db.collection('users').doc(currentUser.uid);
+    var incoming = (data && typeof data.lastModified === 'number') ? data.lastModified : Date.now();
+    return db.runTransaction(function (tx) {
+      return tx.get(docRef).then(function (doc) {
+        if (doc.exists) {
+          var server = doc.data();
+          var serverLast = (server && typeof server.lastModified === 'number') ? server.lastModified : 0;
+          // Server punya perubahan yang lebih baru → jangan timpa, muat ulang dari server.
+          if (serverLast > incoming) {
+            return { stale: true, serverData: server };
+          }
+          // Jangan biarkan state kosong menimpa data yang sudah ada.
+          if (isEmptyState(data) && !isEmptyState(server)) {
+            return { stale: true, serverData: server };
+          }
+        }
+        tx.set(docRef, data);
+        return { stale: false };
+      });
+    }).then(function (res) {
+      if (res && res.stale) {
+        setSync('synced');
+        // Muat ulang dari server supaya state lokal tidak lagi menimpa data yang lebih baru.
+        if (typeof window.__applyRemoteData === 'function' && res.serverData) window.__applyRemoteData(res.serverData);
+        return res;
+      }
       setSync('synced');
+      return res || { stale: false };
     }).catch(function (err) {
       console.error('Firestore save error:', err);
       setSync('error');
+      return { stale: false };
     });
   }
 
@@ -282,7 +326,13 @@
         var isSelfEcho = d.writer === writerId;
         if (isSelfEcho) {
           // Data hasil write sendiri — jangan render ulang, cukup tandai siap.
-          if (!readyFired) { readyFired = true; notifyReady(currentUser, d); }
+          // Tapi saat load pertama (readyFired belum true), tetap muat data ke state
+          // agar boot() tidak membuat "Project 1" kosong lalu menimpa data yang ada.
+          if (!readyFired) {
+            readyFired = true;
+            if (typeof window.__applyRemoteData === 'function') window.__applyRemoteData(d);
+            notifyReady(currentUser, d);
+          }
           setSync('synced');
           return;
         }

@@ -3678,7 +3678,13 @@
         return;
       }
       if (!user) return; // belum login — layar login tampil (auth-gate)
+      var hasCloudData = !!(cloudData && Array.isArray(cloudData.projects) && cloudData.projects.length);
+      if (!state.projects.length && hasCloudData) {
+        // Pastikan data cloud ter-load ke state (mis. saat snapshot awal terdeteksi self-echo).
+        window.__applyRemoteData(cloudData);
+      }
       if (!state.projects.length) {
+        // Hanya buat project default kalau akun benar-benar belum punya data.
         const proj = { id: uid(), name: "Project 1", clients: [], accountLink: "" };
         state.projects.push(proj);
         state.currentProjectId = proj.id;
