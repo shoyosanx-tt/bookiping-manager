@@ -142,6 +142,10 @@
       remove: "Hapus", songTitlePlaceholder: "Judul lagu", audioLinkPlaceholder: "Link audio https://...",
       none: "-- Tidak Ada --", min6Chars: "Min 6 karakter", clientNamePh: "Nama client / brand",
       clientAdReport: "Laporan Ad Client", addBatch: "Tambah Batch", addBatchPrompt: "Nama Batch", batchDiffClient: "Ada job yang berbeda client!", added: "ditambahkan", welcomeTitle: "Selamat Datang",
+      uploadProvider: "Penyedia Upload Video", uploadVideo: "Unggah Video", uploads: "Unggahan", viewUploads: "Lihat Unggahan",
+      download: "Unduh", uploading: "Mengunggah…", uploadFailed: "Unggah gagal. Coba lagi.",
+      gofileNote: "Video disimpan di Gofile (setiap video mendapat folder sendiri).", noUploads: "Belum ada video diunggah",
+      uploaded: "Diunggah", provider: "Penyedia", confirmDeleteUpload: "Hapus video ini? Aksi tidak bisa dibatalkan.",
     },
     en: {
       tagline: "Job tracker for posting",
@@ -270,6 +274,10 @@
       remove: "Remove", songTitlePlaceholder: "Song title", audioLinkPlaceholder: "Audio link https://...",
       none: "-- None --", min6Chars: "Min 6 characters", clientNamePh: "Client name / brand",
       clientAdReport: "Client Ad Report", addBatch: "Add Batch", addBatchPrompt: "Batch Name", batchDiffClient: "There are jobs from different clients!", added: "added",
+      uploadProvider: "Video Upload Provider", uploadVideo: "Upload Video", uploads: "Uploads", viewUploads: "View Uploads",
+      download: "Download", uploading: "Uploading…", uploadFailed: "Upload failed. Try again.",
+      gofileNote: "Videos are stored in Gofile (each video gets its own folder).", noUploads: "No videos uploaded yet",
+      uploaded: "Uploaded", provider: "Provider", confirmDeleteUpload: "Delete this video? This cannot be undone.",
     },
     ms: {
       tagline: "Penjejak kerja untuk posting",
@@ -397,6 +405,10 @@
       remove: "Padam", songTitlePlaceholder: "Tajuk lagu", audioLinkPlaceholder: "Pautan audio https://...",
       none: "-- Tiada --", min6Chars: "Min 6 aksara", clientNamePh: "Nama klien / jenama",
       clientAdReport: "Laporan Ad Klien", addBatch: "Tambah Batch", addBatchPrompt: "Nama Batch", batchDiffClient: "Terdapat job daripada client yang berbeza!", added: "ditambah",
+      uploadProvider: "Pembekal Muat Naik Video", uploadVideo: "Muat Naik Video", uploads: "Muat Naik", viewUploads: "Lihat Muat Naik",
+      download: "Muat Turun", uploading: "Memuat Naik…", uploadFailed: "Muat naik gagal. Cuba lagi.",
+      gofileNote: "Video disimpan di Gofile (setiap video ada folder sendiri).", noUploads: "Belum ada video dimuat naik",
+      uploaded: "Dimuat Naik", provider: "Pembekal", confirmDeleteUpload: "Padam video ini? Tindakan tidak boleh dibatalkan.",
     },
     ja: {
       tagline: "ジョブトラッカー",
@@ -524,10 +536,14 @@
       remove: "削除", songTitlePlaceholder: "曲名", audioLinkPlaceholder: "音源リンク https://...",
       none: "-- なし --", min6Chars: "6文字以上", clientNamePh: "クライアント名 / ブランド",
       clientAdReport: "クライアント広告レポート", addBatch: "バッチを追加", addBatchPrompt: "バッチ名", batchDiffClient: "別のクライアントのジョブがあります！", added: "追加しました",
+      uploadProvider: "動画アップロード先", uploadVideo: "動画をアップロード", uploads: "アップロード", viewUploads: "アップロードを表示",
+      download: "ダウンロード", uploading: "アップロード中…", uploadFailed: "アップロードに失敗しました。もう一度お試しください。",
+      gofileNote: "動画はGofileに保存されます（各動画は独自フォルダに保存）。", noUploads: "まだ動画はアップロードされていません",
+      uploaded: "アップロード済", provider: "プロバイダー", confirmDeleteUpload: "この動画を削除しますか？元に戻せません。",
     }
   };
 
-  let settings = { lang: "en", currency: "USD", hideMoney: true, theme: "dark" };
+  let settings = { lang: "en", currency: "USD", hideMoney: true, theme: "dark", uploadProvider: "gofile" };
   let exchangeRates = null;
   let rateCacheTime = 0;
 
@@ -1753,15 +1769,13 @@
       tableWrapEl.innerHTML = `<div class="empty-state"><h3>${_("noTasks")}</h3><p>${_("noMatchDesc")}</p></div>`;
       return;
     }
-    let totalSent = 0, totalTarget = 0, doneCount = 0;
+    let doneCount = 0;
     const rows = jobs.map(({client, job}) => {
-      const wlinks = job.workerLinks || [];
-      const sentCount = wlinks.filter(Boolean).length;
-      const wkQty2 = job.workerQty || 1;
-      totalSent += sentCount; totalTarget += wkQty2;
+      const uploads = job.workerUploads || [];
+      const upCount = uploads.length;
       if (job.workerDone) doneCount++;
-      const linksCell = sentCount > 0
-        ? `<button class="view-worker-links-btn btn btn-ghost btn-sm" data-job-id="${job.id}" data-song="${escapeAttr(job.songTitle || '')}">${_("viewLinks")} (${sentCount})</button>`
+      const uploadsCell = upCount > 0
+        ? `<button class="view-uploads-btn btn btn-ghost btn-sm" data-job-id="${job.id}" data-song="${escapeAttr(job.songTitle || '')}">${_("viewUploads")} (${upCount})</button>`
         : `<span class="dash">\u2014</span>`;
       const statusBadge = job.workerDone
         ? `<span class="badge ok">${_("done")}</span>`
@@ -1770,14 +1784,15 @@
         <td class="cell-client" title="${escapeAttr(client.name)}">${escapeHtml(client.name)}</td>
         <td class="cell-song" title="${escapeAttr(job.songTitle)}">${escapeHtml(job.songTitle || "\u2014")}</td>
         <td class="cell-num">${job.jumlah || 1}</td>
-        <td class="cell-num">${wkQty2}</td>
-        <td class="cell-links"><span class="links-count">${sentCount}/${wkQty2}</span>${linksCell}</td>
+        <td class="cell-num">${job.workerQty || 1}</td>
+        <td class="cell-links">${uploadsCell}</td>
         <td>${badge(deadlineLabel(job.deadline), deadlineKind(job.deadline))}</td>
         <td>${statusBadge}</td>
         <td class="cell-action"><button class="worker-done-btn${job.workerDone ? ' on' : ''}" data-job-id="${job.id}">${job.workerDone ? _("undo") : _("done")}</button></td>
       </tr>`;
     }).join('');
     const initials = (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase() || "?";
+    const totalUpAll = jobs.reduce((s, e) => s + (e.job.workerUploads || []).length, 0);
     tableWrapEl.innerHTML = `
       <div class="worker-work-panel">
         <div class="worker-work-head">
@@ -1785,7 +1800,7 @@
             <div class="worker-work-avatar">${escapeHtml(initials)}</div>
             <div>
               <div class="worker-work-name">${escapeHtml(name)}</div>
-              <div class="worker-work-sub">${jobs.length} ${_("job")} \u00B7 ${_("linksSent")} ${totalSent}/${totalTarget} \u00B7 ${_("done")} ${doneCount}/${jobs.length}</div>
+              <div class="worker-work-sub">${jobs.length} ${_("job")} \u00B7 ${_("uploads")} ${totalUpAll} \u00B7 ${_("done")} ${doneCount}/${jobs.length}</div>
             </div>
           </div>
           <button class="btn btn-ghost btn-sm worker-work-link" data-wid="${escapeAttr(workerId)}" title="${_("copyLinkTitle")}">${_("link")}</button>
@@ -1793,7 +1808,7 @@
         <div class="worker-work-scroll">
           <table>
             <thead><tr>
-              <th>${_("client")}</th><th>${_("song")}</th><th class="cell-num">${_("qty")}</th><th class="cell-num">${_("wkQty")}</th><th>${_("linksSent")}</th><th>${_("due")}</th><th>${_("status")}</th><th class="cell-action">${_("done")}</th>
+              <th>${_("client")}</th><th>${_("song")}</th><th class="cell-num">${_("qty")}</th><th class="cell-num">${_("wkQty")}</th><th>${_("uploads")}</th><th>${_("due")}</th><th>${_("status")}</th><th class="cell-action">${_("done")}</th>
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
@@ -1806,11 +1821,11 @@
         if (e2) { e2.job.workerDone = !e2.job.workerDone; save(); renderAll(); }
       });
     });
-    tableWrapEl.querySelectorAll('.view-worker-links-btn').forEach(btn => {
+    tableWrapEl.querySelectorAll('.view-uploads-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const jobId2 = btn.dataset.jobId;
         const song = btn.dataset.song || _("untitled");
-        showWorkerLinksPopup(jobId2, song);
+        showUploadsPopup(jobId2, song);
       });
     });
   }
@@ -2232,6 +2247,100 @@
       renderAll();
     });
   }
+  // ===== VIDEO UPLOAD (client-side providers) =====
+  function gofileUpload(file, onProgress) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      var fd = new FormData();
+      fd.append("file", file);
+      xhr.open("POST", "https://upload.gofile.io/uploadfile");
+      xhr.upload.onprogress = function (e) { if (onProgress && e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100)); };
+      xhr.onload = function () {
+        try {
+          var r = JSON.parse(xhr.responseText);
+          if (r && r.status === "ok" && r.data) {
+            var data = r.data;
+            var f = (data.files && data.files.length) ? data.files[0] : data;
+            if (f && (f.downloadPage || f.id)) resolve(f);
+            else reject(new Error("upload"));
+          } else {
+            reject(new Error((r && r.status) || "upload"));
+          }
+        } catch (e2) { reject(e2); }
+      };
+      xhr.onerror = function () { reject(new Error("network")); };
+      xhr.send(fd);
+    });
+  }
+  function uploadRecordFromGofile(meta, file) {
+    return {
+      id: uid(),
+      provider: "gofile",
+      name: file ? file.name : (meta.name || "video"),
+      size: meta.size || 0,
+      url: meta.downloadLink || meta.directLink || meta.downloadPage || "",
+      pageUrl: meta.downloadPage || "",
+      parentFolder: meta.parentFolder || "",
+      code: meta.code || "",
+      uploadedAt: Date.now()
+    };
+  }
+  function formatBytes(n) {
+    if (!n) return "";
+    var u = ["B", "KB", "MB", "GB"]; var i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return n.toFixed(1) + " " + u[i];
+  }
+  function renderUploadRow(u, idx) {
+    var dl = u.url || u.pageUrl || "";
+    var meta = (u.provider || "") + (u.size ? " \u00B7 " + formatBytes(u.size) : "") + (u.uploadedAt ? " \u00B7 " + new Date(u.uploadedAt).toLocaleString() : "");
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--accent-soft);border-radius:var(--radius-sm)">'
+      + '<span style="color:var(--accent);font-size:14px">&#127909;</span>'
+      + '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(u.name || _("untitled")) + '</div>'
+      + (meta ? '<div style="font-size:10px;color:var(--muted-2)">' + escapeHtml(meta) + '</div>' : '')
+      + '</div>'
+      + (dl ? '<a href="' + escapeAttr(dl) + '" target="_blank" rel="noopener" class="btn btn-primary" style="font-size:11px;padding:5px 12px;text-decoration:none">' + _("download") + '</a>' : '')
+      + '<button class="del-upload-btn btn btn-danger" data-idx="' + idx + '" style="font-size:11px;padding:5px 10px">' + _("delete") + '</button>'
+      + '</div>';
+  }
+  function showUploadsPopup(jobId, songTitle) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-backdrop';
+    overlay.style.cssText = 'z-index:9999';
+    overlay.innerHTML = '<div class="modal" style="width:440px">'
+      + '<div class="modal-head"><h2>' + _("uploads") + ' \u2014 ' + escapeHtml(songTitle || _("untitled")) + '</h2><button class="icon-btn close-modal-btn" aria-label="' + _("close") + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>'
+      + '<div class="modal-body" style="max-height:50vh;overflow-y:auto"><div id="uploadsPopupBody"></div></div>'
+      + '<div class="modal-foot"><div class="spacer"></div><button class="btn btn-ghost close-modal-btn">' + _("close") + '</button></div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    const body = overlay.querySelector('#uploadsPopupBody');
+    const entry = findJobEntry(jobId);
+    if (!entry) {
+      body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted-2);font-size:13px">' + _("jobNotFound") + '</div>';
+    } else {
+      const ups = entry.job.workerUploads || [];
+      if (!ups.length) {
+        body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted-2);font-size:13px">' + _("noUploads") + '</div>';
+      } else {
+        body.innerHTML = '<div style="display:flex;flex-direction:column;gap:6px">' + ups.map(renderUploadRow).join('') + '</div>';
+      }
+    }
+    overlay.querySelectorAll('.close-modal-btn').forEach(function(el) { el.addEventListener('click', function() { overlay.remove(); }); });
+    overlay.querySelectorAll('.del-upload-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm(_("confirmDeleteUpload"))) return;
+        var idx = parseInt(btn.dataset.idx, 10);
+        var ups = entry.job.workerUploads;
+        if (ups && idx >= 0 && idx < ups.length) ups.splice(idx, 1);
+        save();
+        overlay.remove();
+        showUploadsPopup(jobId, songTitle);
+      });
+    });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    requestAnimationFrame(function() { overlay.classList.add('open'); });
+  }
+
   function renderWorkerView() {
     document.querySelector('.body-shell').style.display = 'none';
     document.querySelector('.topbar').style.display = 'none';
@@ -2275,30 +2384,28 @@
       ${jobs.length === 0 ? '<div style="padding:60px 20px;text-align:center;color:var(--muted-2);font-size:14px">' + (hasAnyJob ? _("allTasksDone") : _("workerViewNoTasksYet")) + '</div>' :
       jobs.map(function(item) {
         var j = item.job;
-        var wkQty = j.workerQty || 1;
         var str = '<div class="wk-task-card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-bottom:10px">';
         str += '<div style="font-size:15px;font-weight:600;margin-bottom:8px">' + escapeHtml(j.songTitle || _("untitled")) + '</div>';
         if (j.deadline) str += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + _("due") + ': ' + deadlineLabel(j.deadline) + '</div>';
         if (j.workerNote) str += '<div style="font-size:12px;margin-bottom:8px;padding:8px 10px;background:var(--accent-soft);border-radius:var(--radius-sm);color:var(--accent)"><strong>' + _("workerNote") + ':</strong> ' + escapeHtml(j.workerNote) + '</div>';
         if (j.note) str += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">' + escapeHtml(j.note) + '</div>';
-        str += '<div style="font-size:12px;color:var(--muted-2);margin-bottom:10px">' + _("target") + ': ' + wkQty + ' ' + (wkQty > 1 ? _("links") : _("link")) + '</div>';
         if (j.songLink) str += '<div style="margin-bottom:10px"><a href="' + escapeAttr(j.songLink) + '" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent)">' + _("openAudio") + '</a></div>';
-        str += '<div class="wk-link-rows" data-wk-job-id="' + j.id + '">';
-        for (var li = 0; li < wkQty; li++) {
-          var linkVal = (j.workerLinks && j.workerLinks[li]) || '';
-          var sent = !!linkVal;
-          if (sent) {
-            str += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:6px 10px;background:var(--accent-soft);border-radius:var(--radius-sm)"><span style="color:var(--accent);font-size:14px">&#10003;</span><a href="' + escapeAttr(linkVal) + '" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(linkVal) + '</a><span style="font-size:10px;color:var(--muted-2)">' + _("link") + ' ' + (li + 1) + ' ' + _("sent") + '</span></div>';
-          } else {
-            str += '<div style="display:flex;gap:6px;margin-bottom:4px"><input type="url" class="wk-link-inp" data-li="' + li + '" placeholder="' + _("link") + ' ' + (li + 1) + '..." style="flex:1;padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:var(--font-body)"><button class="wk-link-send btn btn-primary" data-li="' + li + '" style="font-size:11px;padding:6px 14px">' + _("send") + '</button></div>';
-          }
+        var ups = Array.isArray(j.workerUploads) ? j.workerUploads : [];
+        str += '<div style="margin-top:10px;border-top:1px dashed var(--border-soft);padding-top:10px">';
+        str += '<div style="font-size:12px;color:var(--muted);margin-bottom:6px"><strong>' + _("uploads") + '</strong> (' + ups.length + ')</div>';
+        if (ups.length) {
+          str += '<div style="display:flex;flex-direction:column;gap:4px">' + ups.map(function(u) {
+            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface-alt);border-radius:var(--radius-sm)">'
+              + '<span style="font-size:12px;color:var(--accent)">&#127909;</span>'
+              + '<span style="font-size:12px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(u.name || _("untitled")) + '</span>'
+              + (u.size ? '<span style="font-size:10px;color:var(--muted-2)">' + formatBytes(u.size) + '</span>' : '')
+              + '</div>';
+          }).join('') + '</div>';
         }
+        str += '<div style="margin-top:6px"><button class="wk-upload-video btn btn-ghost" data-job-id="' + j.id + '" style="font-size:11px;padding:5px 12px">' + _("uploadVideo") + '</button></div>';
+        str += '<div class="wk-upload-progress" data-job-id="' + j.id + '" style="display:none;margin-top:8px"><div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted-2)"><div style="flex:1;height:6px;background:var(--border);border-radius:99px;overflow:hidden"><div class="wk-upload-progress-fill" style="height:100%;width:0%;background:var(--accent);transition:width .15s"></div></div><span class="wk-upload-progress-pct" style="min-width:36px;text-align:right">0%</span></div></div>';
         str += '</div>';
-        var allSent = true;
-        for (var li2 = 0; li2 < wkQty; li2++) {
-          if (!(j.workerLinks && j.workerLinks[li2])) { allSent = false; break; }
-        }
-        if (allSent && !j.workerDone) {
+        if (!j.workerDone) {
           str += '<div style="margin-top:10px;text-align:right"><button class="wk-mark-done btn btn-primary" data-job-id="' + j.id + '" style="font-size:12px;padding:6px 16px">' + _("markComplete") + '</button></div>';
         }
         if (j.workerDone) {
@@ -2308,43 +2415,70 @@
         return str;
       }.bind(this)).join('')}
       <div style="margin-top:16px;text-align:center;color:var(--muted-2);font-size:12px">${_("syncSaved")} — ${_("realtime")}</div>`;
-    container.querySelectorAll('.wk-link-send').forEach(function(btn) {
+    var wkUploadInput = document.createElement('input');
+    wkUploadInput.type = 'file';
+    wkUploadInput.accept = 'video/*,.mp4,.webm,.mov,.avi,.mkv,.m4v';
+    wkUploadInput.style.display = 'none';
+    container.appendChild(wkUploadInput);
+    var wkPendingJobId = null;
+    container.querySelectorAll('.wk-upload-video').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        var card = btn.closest('.wk-task-card');
-        var jobId = card.querySelector('.wk-link-rows').dataset.wkJobId;
-        var li = parseInt(btn.dataset.li);
-        var inp = btn.parentElement.querySelector('.wk-link-inp');
-        var url = inp.value.trim();
-        if (!url) return;
+        wkPendingJobId = btn.dataset.jobId;
+        wkUploadInput.value = '';
+        wkUploadInput.click();
+      });
+    });
+    wkUploadInput.addEventListener('change', function() {
+      var file = wkUploadInput.files && wkUploadInput.files[0];
+      var jobId = wkPendingJobId;
+      if (!file || !jobId) return;
+      var provider = (workerViewAdminData.settings && workerViewAdminData.settings.uploadProvider) || "gofile";
+      if (provider !== "gofile") { toast(_("uploadFailed"), true); return; }
+      var uploadBtn = container.querySelector('.wk-upload-video[data-job-id="' + jobId + '"]');
+      var origLabel = uploadBtn ? uploadBtn.textContent : '';
+      var progWrap = container.querySelector('.wk-upload-progress[data-job-id="' + jobId + '"]');
+      var progFill = progWrap ? progWrap.querySelector('.wk-upload-progress-fill') : null;
+      var progPct = progWrap ? progWrap.querySelector('.wk-upload-progress-pct') : null;
+      function setProgress(p) {
+        if (progFill) progFill.style.width = (p || 0) + '%';
+        if (progPct) progPct.textContent = (p || 0) + '%';
+      }
+      if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.textContent = _("uploading"); }
+      if (progWrap) progWrap.style.display = '';
+      setProgress(0);
+      gofileUpload(file, setProgress).then(function(meta) {
+        setProgress(100);
+        var rec = uploadRecordFromGofile(meta, file);
         var found = false;
         allClients.forEach(function(c) {
           (c.jobs || []).forEach(function(j) {
             if (j.id === jobId) {
-              if (!Array.isArray(j.workerLinks)) j.workerLinks = [];
-              j.workerLinks[li] = url;
+              if (!Array.isArray(j.workerUploads)) j.workerUploads = [];
+              j.workerUploads.push(rec);
               found = true;
             }
           });
         });
         if (found && oid && typeof window.__firebase !== 'undefined' && window.__firebase.ready() && typeof firebase !== 'undefined') {
-          inp.disabled = true; btn.textContent = '...';
           delete workerViewAdminData.writer;
           firebase.firestore().collection('users').doc(oid).set(workerViewAdminData).then(function() {
-            toast(_("link") + ' ' + (li + 1) + ' ' + _("sent") + '!');
+            toast(_("uploaded") + '!');
             renderWorkerView();
           }).catch(function(err) {
-            console.error('Worker send error:', err);
+            console.error('Worker upload save error:', err);
             toast(_("sendFailed"), true);
             renderWorkerView();
           });
         } else {
           renderWorkerView();
         }
-      });
-    });
-    container.querySelectorAll('.wk-link-inp').forEach(function(inp) {
-      inp.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { var btn = inp.parentElement.querySelector('.wk-link-send'); if (btn) btn.click(); }
+      }).catch(function(err) {
+        console.error('Worker upload error:', err);
+        toast(_("uploadFailed"), true);
+        if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = origLabel; }
+        if (progWrap) progWrap.style.display = 'none';
+        setProgress(0);
+        renderWorkerView();
       });
     });
     container.querySelectorAll('.wk-mark-done').forEach(function(btn) {
@@ -2547,6 +2681,7 @@
   $("#btnSettings").addEventListener("click", () => {
     $("#settingsLang").value = settings.lang;
     $("#settingsTheme").value = settings.theme || "light";
+    $("#settingsUploadProvider").value = settings.uploadProvider || "gofile";
     renderCurrencySelects();
     $("#shortcutRef").innerHTML = _("shortcuts");
     openModal(settingsModal);
@@ -2556,6 +2691,7 @@
     settings.lang = $("#settingsLang").value;
     settings.theme = $("#settingsTheme").value;
     settings.currency = $("#settingsCurrency").value;
+    settings.uploadProvider = $("#settingsUploadProvider").value;
     applyTheme();
     saveSettings();
     closeModal(settingsModal);
