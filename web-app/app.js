@@ -590,7 +590,7 @@
     pendingOnly: true,
     notedOnly: false,
     search: "",
-    filters: { worker: "", workerId: "", due: "", post: "", paid: "", workerPaid: "", sortBy: "urgent" },
+    filters: { worker: "", workerId: "", due: "", post: "", paid: "", workerPaid: "", sortBy: "newest" },
     filterMonth: "",
     filterYear: "",
     selectedJobIds: new Set(),
@@ -646,7 +646,7 @@
       state.workers = cloudData.workers || [];
       if (cloudData.settings) Object.assign(settings, cloudData.settings);
       if (cloudData.ui && cloudData.ui.sortBy) {
-        state.filters.sortBy = (cloudData.ui.sortBy === "urgent" || cloudData.ui.sortBy === "oldest") ? "urgent" : cloudData.ui.sortBy;
+        state.filters.sortBy = cloudData.ui.sortBy;
       }
       state.selectedJobIds = new Set();
       state.selectedClientIds = new Set();
@@ -1326,11 +1326,6 @@
     const d = new Date(ts);
     return d.getDate() + ' ' + monthName(d.getMonth() + 1) + ' ' + d.getFullYear();
   }
-  // ponytail: createdAt is "newest"; reused by batch grouping + entry sort
-  const jobDeadlineTime = (job) => {
-    const dl = job && job.deadline;
-    return dl ? Date.parse(dl) : Infinity;
-  };
   function jobMatchesGroupKey(job, key) {
     if (key.startsWith('d:')) return jobDateKey(job) === key.slice(2);
     if (key.startsWith('b:')) {
@@ -1512,10 +1507,14 @@
       const sortSel = $("#sortBy");
       if (sortSel) sortSel.value = "newest";
       renderAll();
-      window.autoHideSidebar?.(1250);
     });
     clientListEl.appendChild(allItem);
-    const sortedClients = [...state.clients].sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { numeric: true }));
+    // Order clients by most recent activity first (newest batch/job on top)
+    const sortedClients = [...state.clients].sort((a, b) => {
+      const lastA = (a.jobs || []).reduce((m, j) => Math.max(m, j.createdAt || 0), 0);
+      const lastB = (b.jobs || []).reduce((m, j) => Math.max(m, j.createdAt || 0), 0);
+      return lastB - lastA || (b.jobs || []).length - (a.jobs || []).length || (a.name || "").localeCompare(b.name || "", undefined, { numeric: true });
+    });
     for (const c of sortedClients) {
       const item = document.createElement("div");
       item.className = "client-item" + (state.selectedClientIds.has(c.id) ? " active" : "");
@@ -1551,7 +1550,6 @@
           state.clientShiftAnchor = c.id;
         }
         renderAll();
-        window.autoHideSidebar?.(1250);
       });
       clientListEl.appendChild(item);
     }
@@ -1598,7 +1596,7 @@
     jobsItem.dataset.clientId = "";
     const pendingCount = state.clients.reduce((n, c) => n + c.jobs.filter(j => linkQtySum(j.links || []) < (j.jumlah || 1)).length, 0);
     jobsItem.innerHTML = `<span class="client-name">${_("allJobs")}</span><span class="client-count">${pendingCount}</span>`;
-    jobsItem.addEventListener("click", () => { state.allJobs = true; state.batchOnly = false; state.pendingOnly = true; state.selectedClientIds = new Set(); state.selectedJobIds = new Set(); state.clientShiftAnchor = null; state.filters.workerId = ""; state.filters.worker = ""; renderAll(); window.autoHideSidebar?.(1250); });
+    jobsItem.addEventListener("click", () => { state.allJobs = true; state.batchOnly = false; state.pendingOnly = true; state.selectedClientIds = new Set(); state.selectedJobIds = new Set(); state.clientShiftAnchor = null; state.filters.workerId = ""; state.filters.worker = ""; renderAll(); });
     el.appendChild(jobsItem);
   }
 
@@ -1917,7 +1915,7 @@
         const d = a.client.name.localeCompare(b.client.name);
         return sort === "az" ? d : -d;
       } : (a, b) => {
-        const ta = jobDeadlineTime(a.job), tb = jobDeadlineTime(b.job);
+        const ta = a.job.createdAt || 0, tb = b.job.createdAt || 0;
         return sort === "oldest" ? ta - tb : tb - ta;
       };
       const groupScore = (key) => customOrder
@@ -1927,7 +1925,7 @@
           : sort === "az" || sort === "za"
             ? groups[key][0].client.name
             : groups[key].reduce((m, it) => {
-                const s = jobDeadlineTime(it.job);
+                const s = it.job.createdAt || 0;
                 return (m === null || (sort === "oldest" ? s < m : s > m)) ? s : m;
               }, null);
       const batchKeys = Object.keys(groups).sort((a, b) => {
@@ -2135,7 +2133,6 @@
       });
     });
     syncStickyHeader();
-    window.autoHideSidebar?.(1250);
   }
 
   function renderSkeleton() {
@@ -3893,27 +3890,6 @@
       });
     });
     applyView();
-    // auto-hide sidebar: collapse when space is tight (narrow viewport or wide table)
-    function autoHideSidebar(minWidth) {
-      if (!sidebarWrap) return;
-      if (window.innerWidth < (minWidth || 1100)) {
-        sidebarWrap.classList.add("collapsed");
-        navRail?.classList.add("sidebar-closed");
-      }
-    }
-    autoHideSidebar();
-    window.addEventListener("resize", () => autoHideSidebar());
-    window.autoHideSidebar = autoHideSidebar;
-    // auto-hide sidebar ketika pengguna beraktivitas di area halaman utama
-    const mainEl = document.querySelector(".main");
-    if (mainEl) {
-      mainEl.addEventListener("click", () => {
-        if (sidebarWrap && !sidebarWrap.classList.contains("collapsed")) {
-          sidebarWrap.classList.add("collapsed");
-          navRail?.classList.add("sidebar-closed");
-        }
-      });
-    }
     // manual toggle button
     $("#railToggle")?.addEventListener("click", (e) => { e.stopPropagation(); toggleSidebar(); });
   }
