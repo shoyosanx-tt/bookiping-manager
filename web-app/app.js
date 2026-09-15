@@ -146,6 +146,7 @@
       download: "Unduh", uploading: "Mengunggah…", uploadFailed: "Unggah gagal. Coba lagi.",
       gofileNote: "Video disimpan di Gofile (setiap video mendapat folder sendiri).", noUploads: "Belum ada video diunggah",
       uploaded: "Diunggah", provider: "Penyedia", confirmDeleteUpload: "Hapus video ini? Aksi tidak bisa dibatalkan.",
+      draft: "Draft", draftVideo: "Video Draft", uploadDraft: "Unggah Draft", replaceDraft: "Ganti Draft", viewDraft: "Lihat Draft", noDraft: "Belum ada draft video",
     },
     en: {
       tagline: "Job tracker for posting",
@@ -278,6 +279,7 @@
       download: "Download", uploading: "Uploading…", uploadFailed: "Upload failed. Try again.",
       gofileNote: "Videos are stored in Gofile (each video gets its own folder).", noUploads: "No videos uploaded yet",
       uploaded: "Uploaded", provider: "Provider", confirmDeleteUpload: "Delete this video? This cannot be undone.",
+      draft: "Draft", draftVideo: "Draft Video", uploadDraft: "Upload Draft", replaceDraft: "Replace Draft", viewDraft: "View Draft", noDraft: "No draft video yet",
     },
     ms: {
       tagline: "Penjejak kerja untuk posting",
@@ -409,6 +411,7 @@
       download: "Muat Turun", uploading: "Memuat Naik…", uploadFailed: "Muat naik gagal. Cuba lagi.",
       gofileNote: "Video disimpan di Gofile (setiap video ada folder sendiri).", noUploads: "Belum ada video dimuat naik",
       uploaded: "Dimuat Naik", provider: "Pembekal", confirmDeleteUpload: "Padam video ini? Tindakan tidak boleh dibatalkan.",
+      draft: "Draf", draftVideo: "Video Draf", uploadDraft: "Muat Naik Draf", replaceDraft: "Ganti Draf", viewDraft: "Lihat Draf", noDraft: "Belum ada video draf",
     },
     ja: {
       tagline: "ジョブトラッカー",
@@ -540,6 +543,7 @@
       download: "ダウンロード", uploading: "アップロード中…", uploadFailed: "アップロードに失敗しました。もう一度お試しください。",
       gofileNote: "動画はGofileに保存されます（各動画は独自フォルダに保存）。", noUploads: "まだ動画はアップロードされていません",
       uploaded: "アップロード済", provider: "プロバイダー", confirmDeleteUpload: "この動画を削除しますか？元に戻せません。",
+      draft: "ドラフト", draftVideo: "ドラフト動画", uploadDraft: "ドラフトをアップロード", replaceDraft: "ドラフトを差し替え", viewDraft: "ドラフトを見る", noDraft: "ドラフト動画はまだありません",
     }
   };
 
@@ -1749,6 +1753,9 @@
             </button>
           </td>
           <td class="cell-actions">
+            <button class="row-menu-btn draft-upload-btn${job.draftVideo ? " has-draft" : ""}" data-action="upload-draft" title="${job.draftVideo ? _("viewDraft") : _("uploadDraft")}">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M2 6h12M2 10h12M6 3v10M10 3v10" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            </button>
             <button class="row-menu-btn" data-action="edit" title="${_("editJob")}">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3a1.5 1.5 0 012.1 2.1L5 12.8l-3 .7.7-3 8.6-8.2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
             </button>
@@ -2039,6 +2046,8 @@
       });
       const wnBtn = tr.querySelector('[data-action="edit-workernote"]');
       if (wnBtn) wnBtn.addEventListener("click", (e) => { e.stopPropagation(); openWorkerNoteModal(jobId); });
+      const draftBtn = tr.querySelector('[data-action="upload-draft"]');
+      if (draftBtn) draftBtn.addEventListener("click", (e) => { e.stopPropagation(); showDraftPopup(jobId); });
 // drag-and-drop reorder only in custom sort mode
       tr.draggable = state.filters.sortBy === "custom";
       tr.addEventListener("dragstart", (e) => {
@@ -2334,6 +2343,81 @@
         showUploadsPopup(jobId, songTitle);
       });
     });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    requestAnimationFrame(function() { overlay.classList.add('open'); });
+  }
+
+  function showDraftPopup(jobId, songTitle) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-backdrop';
+    overlay.style.cssText = 'z-index:9999';
+    overlay.innerHTML = '<div class="modal" style="width:440px">'
+      + '<div class="modal-head"><h2>' + _("draftVideo") + ' \u2014 ' + escapeHtml(songTitle || _("untitled")) + '</h2><button class="icon-btn close-modal-btn" aria-label="' + _("close") + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>'
+      + '<div class="modal-body" style="max-height:50vh;overflow-y:auto"><div id="draftPopupBody"></div></div>'
+      + '<div class="modal-foot"><button class="btn btn-primary" id="draftUploadBtn">' + _("uploadDraft") + '</button><div class="spacer"></div><button class="btn btn-ghost close-modal-btn">' + _("close") + '</button></div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    const body = overlay.querySelector('#draftPopupBody');
+    const uploadBtn = overlay.querySelector('#draftUploadBtn');
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'video/*,.mp4,.webm,.mov,.avi,.mkv,.m4v';
+    fileInput.style.display = 'none';
+    overlay.appendChild(fileInput);
+    function renderDraft() {
+      const entry = findJobEntry(jobId);
+      if (!entry) { body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted-2);font-size:13px">' + _("jobNotFound") + '</div>'; return; }
+      const d = entry.job.draftVideo;
+      if (!d) {
+        body.innerHTML = '<div style="padding:30px 20px;text-align:center;color:var(--muted-2);font-size:13px">' + _("noDraft") + '</div>';
+        uploadBtn.textContent = _("uploadDraft");
+      } else {
+        const dl = d.url || d.pageUrl || "";
+        const meta = (d.provider || "") + (d.size ? ' \u00B7 ' + formatBytes(d.size) : '') + (d.uploadedAt ? ' \u00B7 ' + new Date(d.uploadedAt).toLocaleString() : '');
+        body.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--accent-soft);border-radius:var(--radius-sm)">'
+          + '<span style="color:var(--accent);font-size:14px">&#127909;</span>'
+          + '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(d.name || _("untitled")) + '</div>'
+          + (meta ? '<div style="font-size:10px;color:var(--muted-2)">' + escapeHtml(meta) + '</div>' : '')
+          + '</div>'
+          + (dl ? '<a href="' + escapeAttr(dl) + '" target="_blank" rel="noopener" class="btn btn-primary" style="font-size:11px;padding:5px 12px;text-decoration:none">' + _("download") + '</a>' : '')
+          + '<button class="del-draft-btn btn btn-danger" style="font-size:11px;padding:5px 10px">' + _("delete") + '</button>'
+          + '</div>';
+        uploadBtn.textContent = _("replaceDraft");
+      }
+    }
+    renderDraft();
+    function runUpload(file) {
+      if ((settings.uploadProvider || "gofile") !== "gofile") { toast(_("uploadFailed"), true); return; }
+      body.innerHTML = '<div style="padding:16px"><div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted-2)"><div style="flex:1;height:6px;background:var(--border);border-radius:99px;overflow:hidden"><div class="draft-upload-fill" style="height:100%;width:0%;background:var(--accent);transition:width .15s"></div></div><span class="draft-upload-pct" style="min-width:36px;text-align:right">0%</span></div></div>';
+      const fill = body.querySelector('.draft-upload-fill');
+      const pct = body.querySelector('.draft-upload-pct');
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = _("uploading");
+      gofileUpload(file, function(p) { if (fill) fill.style.width = (p || 0) + '%'; if (pct) pct.textContent = (p || 0) + '%'; }).then(function(meta) {
+        const rec = uploadRecordFromGofile(meta, file);
+        const e2 = findJobEntry(jobId);
+        if (e2) { e2.job.draftVideo = rec; save(); renderTable(); }
+        toast(_("uploaded") + '!');
+        uploadBtn.disabled = false;
+        renderDraft();
+      }).catch(function(err) {
+        console.error('Draft upload error:', err);
+        toast(_("uploadFailed"), true);
+        uploadBtn.disabled = false;
+        renderDraft();
+      });
+    }
+    uploadBtn.addEventListener('click', function() { fileInput.value = ''; fileInput.click(); });
+    fileInput.addEventListener('change', function() { const f = fileInput.files && fileInput.files[0]; if (f) runUpload(f); });
+    body.addEventListener('click', function(e) {
+      const del = e.target.closest('.del-draft-btn');
+      if (!del) return;
+      if (!confirm(_("confirmDeleteUpload"))) return;
+      const entry = findJobEntry(jobId);
+      if (entry) { delete entry.job.draftVideo; save(); renderTable(); }
+      renderDraft();
+    });
+    overlay.querySelectorAll('.close-modal-btn').forEach(function(el) { el.addEventListener('click', function() { overlay.remove(); }); });
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
     requestAnimationFrame(function() { overlay.classList.add('open'); });
   }
