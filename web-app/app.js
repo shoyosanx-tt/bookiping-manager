@@ -676,6 +676,12 @@
         var pTotal = linkQtySum(j.links || []);
         j.postStatus = pTotal >= pMax ? 'POSTED' : 'NOT YET';
         j.postLink = j.links.map(l => l.url).join('|');
+        // jaga konsistensi draft multi-qty: migrasi sekali + sinkron legacy
+        if (!Array.isArray(j.draftVideos)) j.draftVideos = [];
+        if (j.draftVideo && !j.draftVideos.length) j.draftVideos = [j.draftVideo];
+        j.draftVideos = j.draftVideos.filter(Boolean);
+        if (j.draftVideos.length) j.draftVideo = j.draftVideos[0];
+        else if (j.draftVideo) delete j.draftVideo;
       });
     });
     const dataObj = { projects: state.projects, currentProjectId: state.currentProjectId, workers: state.workers, settings: settings, ui: { sortBy: state.filters.sortBy }, lastModified: Date.now() };
@@ -706,6 +712,16 @@
       }
       if (!j.workerFee) j.workerFee = 0;
       if (!j.workerFeeCurrency) j.workerFeeCurrency = 'USD';
+      // draft: single draftVideo (lama) -> draftVideos[] (baru, mengikuti qty job)
+      if (!Array.isArray(j.draftVideos)) j.draftVideos = [];
+      if (j.draftVideo && !j.draftVideos.length) {
+        j.draftVideos = [j.draftVideo];
+      }
+      // bersihkan entri null agar slot count akurat
+      j.draftVideos = j.draftVideos.filter(Boolean);
+      // sinkron field lama untuk kompatibilitas (baca: draft pertama)
+      if (j.draftVideos.length) j.draftVideo = j.draftVideos[0];
+      else if (j.draftVideo && !j.draftVideos.length) delete j.draftVideo;
     });
   }
 
@@ -1732,6 +1748,11 @@
     const linkText = total >= max ? total + '/' + max : (total > 0 ? total + '/' + max : _("addLinks"));
     const workerOpts = '<option value="">--</option>' + state.workers.map(w => `<option value="${escapeAttr(w.id)}"${job.workerId === w.id ? ' selected' : ''}>${escapeHtml(w.name)}</option>`).join('');
     const wkQty = job.workerQty || 1;
+    const draftList = getDraftVideos(job);
+    const draftReq = getDraftRequiredCount(job);
+    const draftHas = draftList.length > 0;
+    const draftDone = draftList.filter(function(x) { return x && x.done; }).length;
+    const draftTitle = draftHas ? `${_("viewDraft")} (${draftList.length}/${draftReq} · ✓${draftDone})` : _("uploadDraft");
     return `
         <tr style="animation-delay:${Math.min(idx,8)*30}ms" data-job-id="${job.id}" class="${cls}" ${noteAttr}>
           <td class="cell-no">${idx}</td>
@@ -1753,8 +1774,8 @@
             </button>
           </td>
           <td class="cell-actions">
-            <button class="row-menu-btn draft-upload-btn${job.draftVideo ? " has-draft" : ""}" data-action="upload-draft" title="${job.draftVideo ? _("viewDraft") : _("uploadDraft")}">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M2 6h12M2 10h12M6 3v10M10 3v10" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            <button class="row-menu-btn draft-upload-btn${draftHas ? " has-draft" : ""}" data-action="upload-draft" title="${escapeAttr(draftTitle)}" style="position:relative">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M2 6h12M2 10h12M6 3v10M10 3v10" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>${draftHas ? `<span class="draft-count" style="position:absolute;bottom:-4px;right:-4px;background:var(--ok);color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;line-height:14px;text-align:center;border-radius:99px;padding:0 3px">${draftList.length}/${draftReq}</span>` : ""}
             </button>
             <button class="row-menu-btn" data-action="edit" title="${_("editJob")}">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3a1.5 1.5 0 012.1 2.1L5 12.8l-3 .7.7-3 8.6-8.2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
@@ -2297,6 +2318,28 @@
     while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
     return n.toFixed(1) + " " + u[i];
   }
+  // ===== DRAFT MULTI-QTY (1 job qty N = N draft) =====
+  // Sumber qty = job.jumlah (kolom Qty). Jumlah slot draft = max(jumlah, draft terisi)
+  // agar data lama tidak hilang saat qty dikecilkan.
+  function getDraftVideos(job) {
+    if (!job) return [];
+    if (Array.isArray(job.draftVideos)) return job.draftVideos.filter(Boolean);
+    if (job.draftVideo) return [job.draftVideo];
+    return [];
+  }
+  function getDraftRequiredCount(job) {
+    var qty = Number(job && job.jumlah) || 1;
+    if (qty < 1) qty = 1;
+    var filled = getDraftVideos(job).length;
+    return Math.max(qty, filled, 1);
+  }
+  function syncDraftLegacy(job) {
+    if (!job) return;
+    var list = Array.isArray(job.draftVideos) ? job.draftVideos.filter(Boolean) : [];
+    job.draftVideos = list;
+    if (list.length) job.draftVideo = list[0];
+    else delete job.draftVideo;
+  }
   function renderUploadRow(u, idx) {
     var dl = u.url || u.pageUrl || "";
     var meta = (u.provider || "") + (u.size ? " \u00B7 " + formatBytes(u.size) : "") + (u.uploadedAt ? " \u00B7 " + new Date(u.uploadedAt).toLocaleString() : "");
@@ -2348,55 +2391,87 @@
   }
 
   function showDraftPopup(jobId, songTitle) {
+    var initEntry = findJobEntry(jobId);
+    var title = songTitle || (initEntry && initEntry.job.songTitle) || _("untitled");
     const overlay = document.createElement('div');
     overlay.className = 'modal-backdrop';
     overlay.style.cssText = 'z-index:9999';
-    overlay.innerHTML = '<div class="modal" style="width:440px">'
-      + '<div class="modal-head"><h2>' + _("draftVideo") + ' \u2014 ' + escapeHtml(songTitle || _("untitled")) + '</h2><button class="icon-btn close-modal-btn" aria-label="' + _("close") + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>'
+    overlay.innerHTML = '<div class="modal" style="width:480px">'
+      + '<div class="modal-head"><h2><span class="draft-popup-title">' + _("draftVideo") + ' \u2014 ' + escapeHtml(title) + '</span> <span class="draft-popup-count" style="font-size:11px;color:var(--muted-2);font-weight:500"></span></h2><button class="icon-btn close-modal-btn" aria-label="' + _("close") + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>'
       + '<div class="modal-body" style="max-height:50vh;overflow-y:auto"><div id="draftPopupBody"></div></div>'
       + '<div class="modal-foot"><button class="btn btn-primary" id="draftUploadBtn">' + _("uploadDraft") + '</button><div class="spacer"></div><button class="btn btn-ghost close-modal-btn">' + _("close") + '</button></div>'
       + '</div>';
     document.body.appendChild(overlay);
     const body = overlay.querySelector('#draftPopupBody');
+    const countEl = overlay.querySelector('.draft-popup-count');
     const uploadBtn = overlay.querySelector('#draftUploadBtn');
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'video/*,.mp4,.webm,.mov,.avi,.mkv,.m4v';
     fileInput.style.display = 'none';
     overlay.appendChild(fileInput);
+    var pendingSlot = null;
+    function draftSlotRow(d, idx) {
+      var label = 'Draft ' + (idx + 1);
+      if (!d) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px dashed var(--border);border-radius:var(--radius-sm)">'
+          + '<span style="color:var(--muted-2);font-size:14px">&#127909;</span>'
+          + '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">' + escapeHtml(label) + '</div>'
+          + '<div style="font-size:11px;color:var(--muted-2)">' + escapeHtml(_("noDraft")) + '</div></div>'
+          + '<button class="draft-slot-upload btn btn-primary" data-slot="' + idx + '" style="font-size:11px;padding:5px 12px">' + escapeHtml(_("uploadDraft")) + '</button>'
+          + '</div>';
+      }
+      const dl = d.url || d.pageUrl || "";
+      const meta = (d.provider || "") + (d.size ? ' \u00B7 ' + formatBytes(d.size) : '') + (d.uploadedAt ? ' \u00B7 ' + new Date(d.uploadedAt).toLocaleString() : '');
+      const isDone = !!d.done;
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--accent-soft);border-radius:var(--radius-sm);min-width:0' + (isDone ? ';outline:1px solid var(--ok);opacity:.85' : '') + '">'
+        + '<input type="checkbox" class="draft-done-check" data-slot="' + idx + '" ' + (isDone ? 'checked' : '') + ' title="' + escapeAttr(_("done")) + '" style="width:16px;height:16px;accent-color:var(--ok);cursor:pointer;flex-shrink:0">'
+        + '<span style="color:var(--accent);font-size:14px;flex-shrink:0">&#127909;</span>'
+        + '<div style="flex:1;min-width:0"><div title="' + escapeAttr(d.name || _("untitled")) + '" style="display:flex;align-items:baseline;gap:6px;min-width:0"><span style="font-size:12px;font-weight:600;flex-shrink:0;white-space:nowrap">' + (isDone ? '&#10003; ' : '') + escapeHtml(label) + ' \u00B7</span><span style="font-size:12px;font-weight:400;color:var(--text);flex:1;min-width:0;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' + (isDone ? ';text-decoration:line-through' : '') + '">' + escapeHtml(d.name || _("untitled")) + '</span></div>'
+        + (meta ? '<div style="font-size:10px;color:var(--muted-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(meta) + '</div>' : '')
+        + '</div>'
+        + (dl ? '<a href="' + escapeAttr(dl) + '" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size:11px;padding:5px 10px;text-decoration:none;flex-shrink:0">' + _("download") + '</a>' : '')
+        + '<button class="draft-slot-replace btn btn-ghost" data-slot="' + idx + '" style="font-size:11px;padding:5px 10px;flex-shrink:0">' + escapeHtml(_("replaceDraft")) + '</button>'
+        + '<button class="del-draft-btn btn btn-danger" data-slot="' + idx + '" style="font-size:11px;padding:5px 10px;flex-shrink:0">' + _("delete") + '</button>'
+        + '</div>';
+    }
     function renderDraft() {
       const entry = findJobEntry(jobId);
       if (!entry) { body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted-2);font-size:13px">' + _("jobNotFound") + '</div>'; return; }
-      const d = entry.job.draftVideo;
-      if (!d) {
-        body.innerHTML = '<div style="padding:30px 20px;text-align:center;color:var(--muted-2);font-size:13px">' + _("noDraft") + '</div>';
-        uploadBtn.textContent = _("uploadDraft");
-      } else {
-        const dl = d.url || d.pageUrl || "";
-        const meta = (d.provider || "") + (d.size ? ' \u00B7 ' + formatBytes(d.size) : '') + (d.uploadedAt ? ' \u00B7 ' + new Date(d.uploadedAt).toLocaleString() : '');
-        body.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--accent-soft);border-radius:var(--radius-sm)">'
-          + '<span style="color:var(--accent);font-size:14px">&#127909;</span>'
-          + '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(d.name || _("untitled")) + '</div>'
-          + (meta ? '<div style="font-size:10px;color:var(--muted-2)">' + escapeHtml(meta) + '</div>' : '')
-          + '</div>'
-          + (dl ? '<a href="' + escapeAttr(dl) + '" target="_blank" rel="noopener" class="btn btn-primary" style="font-size:11px;padding:5px 12px;text-decoration:none">' + _("download") + '</a>' : '')
-          + '<button class="del-draft-btn btn btn-danger" style="font-size:11px;padding:5px 10px">' + _("delete") + '</button>'
-          + '</div>';
-        uploadBtn.textContent = _("replaceDraft");
+      var drafts = getDraftVideos(entry.job);
+      var required = getDraftRequiredCount(entry.job);
+      var doneCount = drafts.filter(function(x) { return x && x.done; }).length;
+      if (countEl) countEl.textContent = '(' + drafts.length + '/' + required + ' \u00B7 \u2713' + doneCount + ')';
+      var html = '<div style="display:flex;flex-direction:column;gap:8px">';
+      for (var i = 0; i < required; i++) {
+        html += draftSlotRow(drafts[i] || null, i);
       }
+      html += '</div>';
+      html += '<div style="margin-top:8px;font-size:11px;color:var(--muted-2)">Qty job: ' + (Number(entry.job.jumlah) || 1) + ' \u2192 ' + required + ' slot draft \u00B7 ' + escapeHtml(_("done")) + ': ' + doneCount + '/' + required + '</div>';
+      body.innerHTML = html;
+      uploadBtn.disabled = false;
+      if (drafts.length >= required) uploadBtn.textContent = _("uploadDraft") + ' +';
+      else uploadBtn.textContent = _("uploadDraft") + ' (' + drafts.length + '/' + required + ')';
     }
     renderDraft();
-    function runUpload(file) {
+    function runUpload(file, slotIdx) {
       if ((settings.uploadProvider || "gofile") !== "gofile") { toast(_("uploadFailed"), true); return; }
-      body.innerHTML = '<div style="padding:16px"><div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted-2)"><div style="flex:1;height:6px;background:var(--border);border-radius:99px;overflow:hidden"><div class="draft-upload-fill" style="height:100%;width:0%;background:var(--accent);transition:width .15s"></div></div><span class="draft-upload-pct" style="min-width:36px;text-align:right">0%</span></div></div>';
+      body.innerHTML = '<div style="padding:16px"><div style="font-size:12px;margin-bottom:8px">Draft ' + ((slotIdx == null ? getDraftVideos(findJobEntry(jobId).job).length + 1 : slotIdx + 1)) + ' \u2014 ' + escapeHtml(file.name || '') + '</div><div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted-2)"><div style="flex:1;height:6px;background:var(--border);border-radius:99px;overflow:hidden"><div class="draft-upload-fill" style="height:100%;width:0%;background:var(--accent);transition:width .15s"></div></div><span class="draft-upload-pct" style="min-width:36px;text-align:right">0%</span></div></div>';
       const fill = body.querySelector('.draft-upload-fill');
       const pct = body.querySelector('.draft-upload-pct');
       uploadBtn.disabled = true;
       uploadBtn.textContent = _("uploading");
       gofileUpload(file, function(p) { if (fill) fill.style.width = (p || 0) + '%'; if (pct) pct.textContent = (p || 0) + '%'; }).then(function(meta) {
         const rec = uploadRecordFromGofile(meta, file);
+        rec.done = false;
         const e2 = findJobEntry(jobId);
-        if (e2) { e2.job.draftVideo = rec; save(); renderTable(); }
+        if (e2) {
+          if (!Array.isArray(e2.job.draftVideos)) e2.job.draftVideos = getDraftVideos(e2.job);
+          if (slotIdx != null && slotIdx < e2.job.draftVideos.length) e2.job.draftVideos[slotIdx] = rec;
+          else e2.job.draftVideos.push(rec);
+          syncDraftLegacy(e2.job);
+          save(); renderTable();
+        }
         toast(_("uploaded") + '!');
         uploadBtn.disabled = false;
         renderDraft();
@@ -2407,14 +2482,43 @@
         renderDraft();
       });
     }
-    uploadBtn.addEventListener('click', function() { fileInput.value = ''; fileInput.click(); });
-    fileInput.addEventListener('change', function() { const f = fileInput.files && fileInput.files[0]; if (f) runUpload(f); });
+    uploadBtn.addEventListener('click', function() { pendingSlot = null; fileInput.value = ''; fileInput.click(); });
+    fileInput.addEventListener('change', function() { const f = fileInput.files && fileInput.files[0]; if (f) runUpload(f, pendingSlot); pendingSlot = null; });
+    body.addEventListener('change', function(e) {
+      const chk = e.target.closest ? e.target.closest('.draft-done-check') : null;
+      if (!chk) return;
+      const entry = findJobEntry(jobId);
+      if (!entry) return;
+      var idx = parseInt(chk.dataset.slot, 10);
+      var list = getDraftVideos(entry.job);
+      if (idx >= 0 && idx < list.length) {
+        list[idx].done = chk.checked;
+        entry.job.draftVideos = list;
+        syncDraftLegacy(entry.job);
+        save(); renderTable();
+      }
+      renderDraft();
+    });
     body.addEventListener('click', function(e) {
+      const up = e.target.closest('.draft-slot-upload') || e.target.closest('.draft-slot-replace');
+      if (up) { pendingSlot = parseInt(up.dataset.slot, 10); fileInput.value = ''; fileInput.click(); return; }
       const del = e.target.closest('.del-draft-btn');
       if (!del) return;
       if (!confirm(_("confirmDeleteUpload"))) return;
       const entry = findJobEntry(jobId);
-      if (entry) { delete entry.job.draftVideo; save(); renderTable(); }
+      if (entry) {
+        var idx = parseInt(del.dataset.slot, 10);
+        var list = getDraftVideos(entry.job);
+        if (idx >= 0 && idx < list.length) {
+          // hapus berdasarkan id agar aman walau array sudah disinkron
+          var target = list[idx];
+          entry.job.draftVideos = list.filter(function(x, i) { return i !== idx; });
+          // fallback: jika id cocok hapus by id
+          if (target && target.id) entry.job.draftVideos = entry.job.draftVideos.filter(function(x) { return x !== target; });
+          syncDraftLegacy(entry.job);
+          save(); renderTable();
+        }
+      }
       renderDraft();
     });
     overlay.querySelectorAll('.close-modal-btn').forEach(function(el) { el.addEventListener('click', function() { overlay.remove(); }); });
