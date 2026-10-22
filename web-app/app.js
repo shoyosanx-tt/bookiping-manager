@@ -147,6 +147,7 @@
       gofileNote: "Video disimpan di Gofile (setiap video mendapat folder sendiri).", noUploads: "Belum ada video diunggah",
       uploaded: "Diunggah", provider: "Penyedia", confirmDeleteUpload: "Hapus video ini? Aksi tidak bisa dibatalkan.",
       draft: "Draft", draftVideo: "Video Draft", uploadDraft: "Unggah Draft", replaceDraft: "Ganti Draft", viewDraft: "Lihat Draft", noDraft: "Belum ada draft video",
+      urgentDrafts: "Draft Mendesak", doFirst: "Kerjakan dulu", allDraftsDone: "Semua draft beres!", remaining: "sisa",
     },
     en: {
       tagline: "Job tracker for posting",
@@ -280,6 +281,7 @@
       gofileNote: "Videos are stored in Gofile (each video gets its own folder).", noUploads: "No videos uploaded yet",
       uploaded: "Uploaded", provider: "Provider", confirmDeleteUpload: "Delete this video? This cannot be undone.",
       draft: "Draft", draftVideo: "Draft Video", uploadDraft: "Upload Draft", replaceDraft: "Replace Draft", viewDraft: "View Draft", noDraft: "No draft video yet",
+      urgentDrafts: "Urgent Drafts", doFirst: "Do first", allDraftsDone: "All drafts done!", remaining: "left",
     },
     ms: {
       tagline: "Penjejak kerja untuk posting",
@@ -412,6 +414,7 @@
       gofileNote: "Video disimpan di Gofile (setiap video ada folder sendiri).", noUploads: "Belum ada video dimuat naik",
       uploaded: "Dimuat Naik", provider: "Pembekal", confirmDeleteUpload: "Padam video ini? Tindakan tidak boleh dibatalkan.",
       draft: "Draf", draftVideo: "Video Draf", uploadDraft: "Muat Naik Draf", replaceDraft: "Ganti Draf", viewDraft: "Lihat Draf", noDraft: "Belum ada video draf",
+      urgentDrafts: "Draf Mendesak", doFirst: "Buat dahulu", allDraftsDone: "Semua draf siap!", remaining: "baki",
     },
     ja: {
       tagline: "ジョブトラッカー",
@@ -544,6 +547,7 @@
       gofileNote: "動画はGofileに保存されます（各動画は独自フォルダに保存）。", noUploads: "まだ動画はアップロードされていません",
       uploaded: "アップロード済", provider: "プロバイダー", confirmDeleteUpload: "この動画を削除しますか？元に戻せません。",
       draft: "ドラフト", draftVideo: "ドラフト動画", uploadDraft: "ドラフトをアップロード", replaceDraft: "ドラフトを差し替え", viewDraft: "ドラフトを見る", noDraft: "ドラフト動画はまだありません",
+      urgentDrafts: "緊急ドラフト", doFirst: "優先", allDraftsDone: "全ドラフト完了！", remaining: "残り",
     }
   };
 
@@ -1753,6 +1757,7 @@
     const draftHas = draftList.length > 0;
     const draftDone = draftList.filter(function(x) { return x && x.done; }).length;
     const draftTitle = draftHas ? `${_("viewDraft")} (${draftList.length}/${draftReq} · ✓${draftDone})` : _("uploadDraft");
+    const draftSt = draftStatusKind(draftList.length, draftReq, draftDone);
     return `
         <tr style="animation-delay:${Math.min(idx,8)*30}ms" data-job-id="${job.id}" class="${cls}" ${noteAttr}>
           <td class="cell-no">${idx}</td>
@@ -1774,8 +1779,8 @@
             </button>
           </td>
           <td class="cell-actions">
-            <button class="row-menu-btn draft-upload-btn${draftHas ? " has-draft" : ""}" data-action="upload-draft" title="${escapeAttr(draftTitle)}" style="position:relative">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M2 6h12M2 10h12M6 3v10M10 3v10" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>${draftHas ? `<span class="draft-count" style="position:absolute;bottom:-4px;right:-4px;background:var(--ok);color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;line-height:14px;text-align:center;border-radius:99px;padding:0 3px">${draftList.length}/${draftReq}</span>` : ""}
+            <button class="row-menu-btn draft-upload-btn${draftHas ? " has-draft" : ""}${draftHas ? " " + draftSt : ""}" data-action="upload-draft" title="${escapeAttr(draftTitle)}" style="position:relative">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M2 6h12M2 10h12M6 3v10M10 3v10" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>${draftHas ? `<span class="draft-count ${draftSt}" style="position:absolute;bottom:-4px;right:-4px;color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;line-height:14px;text-align:center;border-radius:99px;padding:0 3px">${draftList.length}/${draftReq}</span>` : ""}
             </button>
             <button class="row-menu-btn" data-action="edit" title="${_("editJob")}">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3a1.5 1.5 0 012.1 2.1L5 12.8l-3 .7.7-3 8.6-8.2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
@@ -1855,10 +1860,86 @@
       });
     });
   }
+  // ===== DRAFT PRIORITY (ticker + banner) =====
+  // Sumber = hasil daftar All Jobs yang tampil (visibleEntries: project aktif +
+  // filter client/bulan/search yang sedang dipakai).
+  // Ticker HANYA menampilkan draft yang sudah diupload/diisi tapi belum
+  // dicentang (belum beres), urut jam/tanggal upload tercepat. Slot kosong
+  // tidak ditampilkan. Sekali dicentang = beres → otomatis lanjut ke berikutnya.
+  function urgentDraftEntries() {
+    var out = [];
+    for (const { client, job } of visibleEntries()) {
+      var drafts = getDraftVideos(job);
+      var required = getDraftRequiredCount(job);
+      var done = drafts.filter(function(x) { return x && x.done; }).length;
+      for (var i = 0; i < drafts.length; i++) {
+        var d = drafts[i];
+        if (!d || d.done) continue;
+        out.push({ client: client, job: job, slot: i, draft: d, uploadedAt: d.uploadedAt || 0,
+          required: required, filled: drafts.length, done: done, due: daysUntil(job.deadline) });
+      }
+    }
+    out.sort(function(a, b) { return (a.uploadedAt || 0) - (b.uploadedAt || 0); });
+    return out;
+  }
+  function draftDueText(due) {
+    if (due == null) return _("notYet");
+    if (due > 0) return _("hDay") + due;
+    if (due === 0) return _("hDay") + "0";
+    return _("telat") + " " + Math.abs(due) + _("hr");
+  }
+  function draftTimeText(ts) {
+    if (!ts) return "";
+    var d = new Date(ts);
+    try {
+      return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch (e) { return d.toLocaleString(); }
+  }
+  function renderDraftTicker() {
+    var el = document.getElementById("draftTicker");
+    if (!el) return;
+    if (state.isWorkerView) { el.style.display = "none"; return; }
+    var list = urgentDraftEntries();
+    if (!list.length) {
+      var hasEmptySlot = false;
+      for (const { job } of visibleEntries()) {
+        if (getDraftVideos(job).length < getDraftRequiredCount(job)) { hasEmptySlot = true; break; }
+      }
+      el.style.display = "";
+      if (hasEmptySlot) {
+        el.innerHTML = '<span class="draft-ticker-label">⏳</span><span style="color:var(--muted-2)">' + escapeHtml(_("noDraft")) + '</span>';
+      } else {
+        el.innerHTML = '<span class="draft-ticker-label" style="color:var(--ok)">✓</span><span class="draft-ticker-static">' + escapeHtml(_("allDraftsDone")) + '</span>';
+      }
+      return;
+    }
+    // hanya 1: draft terisi yang belum beres, upload tercepat
+    var e = list[0];
+    el.style.display = "";
+    var nm = (e.client ? e.client.name : "") + " — " + (e.job.songTitle || _("untitled"));
+    var tstr = draftTimeText(e.uploadedAt);
+    var st = draftStatusKind(e.filled, e.required, e.done);
+    var cnt = '(' + e.filled + '/' + e.required + ' · ✓' + e.done + ')';
+    var html = "🎯 " + _("doFirst") + ": Draft " + (e.slot + 1) + " · " + draftDueText(e.due) + " · " + nm
+      + (tstr ? " · " + _("uploaded") + " " + tstr : "") + " ";
+    el.innerHTML = '<span class="draft-ticker-label" style="color:var(--danger)">⚡ ' + escapeHtml(_("urgentDrafts")) + '</span>'
+      + '<button class="draft-ticker-item draft-ticker-single" data-job-id="' + escapeAttr(e.job.id) + '" title="' + escapeAttr(nm) + ' — ' + escapeAttr(_("viewDraft")) + '">'
+      + '<span class="draft-ticker-count ' + st + '">' + escapeHtml(cnt) + '</span>'
+      + '<span class="draft-ticker-text">' + escapeHtml(html) + "</span></button>";
+    if (!el.dataset.bound) {
+      el.dataset.bound = "1";
+      el.addEventListener("click", function(ev) {
+        var b = ev.target.closest ? ev.target.closest(".draft-ticker-item") : null;
+        if (!b || !b.dataset.jobId) return;
+        showDraftPopup(b.dataset.jobId);
+      });
+    }
+  }
   function renderTable() {
     toggleEnterAnim(tableWrapEl, "table", "table-anim");
     if (state.filters.workerId) {
       renderWorkerWorkPanel(state.filters.workerId);
+      renderDraftTicker();
       return;
     }
     const entries = visibleEntries();
@@ -2162,6 +2243,7 @@
         save();
       });
     });
+    renderDraftTicker();
     syncStickyHeader();
   }
 
@@ -2340,6 +2422,15 @@
     if (list.length) job.draftVideo = list[0];
     else delete job.draftVideo;
   }
+  // Status progres draft: "ok" (hijau, tanpa kedip) | "warn" (kuning, kedip) | "idle" (belum ada draft)
+  function draftStatusKind(filled, required, done) {
+    var req = Number(required) || 0;
+    var dn = Number(done) || 0;
+    var fl = Number(filled) || 0;
+    if (req > 0 && dn >= req) return "ok";
+    if (fl > 0 || dn > 0) return "warn";
+    return "idle";
+  }
   function renderUploadRow(u, idx) {
     var dl = u.url || u.pageUrl || "";
     var meta = (u.provider || "") + (u.size ? " \u00B7 " + formatBytes(u.size) : "") + (u.uploadedAt ? " \u00B7 " + new Date(u.uploadedAt).toLocaleString() : "");
@@ -2435,14 +2526,35 @@
         + '<button class="del-draft-btn btn btn-danger" data-slot="' + idx + '" style="font-size:11px;padding:5px 10px;flex-shrink:0">' + _("delete") + '</button>'
         + '</div>';
     }
+    function draftPriorityBanner(job, drafts, required, doneCount) {
+      var remain = required - doneCount;
+      if (remain <= 0) {
+        return '<div style="margin-bottom:8px;padding:8px 12px;background:var(--ok-soft);border:1px solid var(--ok);border-radius:var(--radius-sm);font-size:12px;font-weight:600;color:var(--ok)">✓ ' + escapeHtml(_("allDraftsDone")) + '</div>';
+      }
+      var firstOpen = 0;
+      for (var i = 0; i < required; i++) { var s = drafts[i]; if (!s || !s.done) { firstOpen = i; break; } }
+      var due = daysUntil(job.deadline);
+      var urgent = due != null && due <= 0;
+      var warn = due != null && due > 0 && due <= 3;
+      var bg = urgent ? "var(--danger-soft)" : warn ? "var(--amber-soft)" : "var(--accent-soft)";
+      var fg = urgent ? "var(--danger)" : warn ? "var(--accent-2)" : "var(--accent)";
+      return '<div style="margin-bottom:8px;padding:8px 12px;background:' + bg + ';border:1px solid ' + fg + ';border-radius:var(--radius-sm);font-size:12px;color:' + fg + '">'
+        + '<div style="font-weight:700">🎯 ' + escapeHtml(_("doFirst")) + ': Draft ' + (firstOpen + 1) + '</div>'
+        + '<div style="margin-top:2px">' + escapeHtml(draftDueText(due)) + ' · ' + escapeHtml(_("remaining")) + ' ' + remain + '/' + required + '</div>'
+        + '</div>';
+    }
     function renderDraft() {
       const entry = findJobEntry(jobId);
       if (!entry) { body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted-2);font-size:13px">' + _("jobNotFound") + '</div>'; return; }
       var drafts = getDraftVideos(entry.job);
       var required = getDraftRequiredCount(entry.job);
       var doneCount = drafts.filter(function(x) { return x && x.done; }).length;
-      if (countEl) countEl.textContent = '(' + drafts.length + '/' + required + ' \u00B7 \u2713' + doneCount + ')';
-      var html = '<div style="display:flex;flex-direction:column;gap:8px">';
+      if (countEl) {
+        countEl.textContent = '(' + drafts.length + '/' + required + ' · ✓' + doneCount + ')';
+        countEl.className = 'draft-popup-count ' + draftStatusKind(drafts.length, required, doneCount);
+      }
+      var html = draftPriorityBanner(entry.job, drafts, required, doneCount);
+      html += '<div style="display:flex;flex-direction:column;gap:8px">';
       for (var i = 0; i < required; i++) {
         html += draftSlotRow(drafts[i] || null, i);
       }

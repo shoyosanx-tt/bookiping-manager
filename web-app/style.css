@@ -392,6 +392,46 @@ a{color:inherit;}
 .select-chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
 
 /* ============================================================
+   Draft priority ticker (teks berjalan)
+   ============================================================ */
+.draft-ticker{
+  display:flex;align-items:center;gap:10px;flex:none;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:6px 10px;margin-bottom:10px;
+  font-size:12px;overflow:hidden;min-width:0;
+}
+.draft-ticker-label{
+  flex:none;font-weight:700;color:var(--accent-2);white-space:nowrap;
+  font-size:11px;text-transform:uppercase;letter-spacing:.03em;
+}
+.draft-ticker-static{color:var(--ok);font-weight:600;}
+.draft-ticker-single{
+  color:var(--danger);font-weight:700;font-size:13px;flex:1;min-width:0;
+  display:flex;align-items:center;gap:8px;overflow:hidden;text-align:left;
+}
+.draft-ticker-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.draft-ticker-view{flex:1;min-width:0;overflow:hidden;mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent);}
+.draft-ticker-track{display:inline-flex;gap:0;white-space:nowrap;width:max-content;animation:draft-ticker-scroll 40s linear infinite;}
+.draft-ticker:hover .draft-ticker-track{animation-play-state:paused;}
+.draft-ticker-seq{display:inline-flex;align-items:center;white-space:nowrap;}
+.draft-ticker-item{
+  background:none;border:none;cursor:pointer;font:inherit;color:var(--text);
+  padding:2px 4px;border-radius:6px;white-space:nowrap;
+}
+.draft-ticker-item:hover{color:var(--accent);background:var(--accent-soft);}
+.draft-ticker-sep{color:var(--muted-2);padding:0 10px;}
+/* status progres draft: kuning kedip (belum beres) / hijau diam (beres) */
+.draft-ticker-count{font-weight:800;padding:0 4px;border-radius:6px;}
+.draft-ticker-count.warn{color:var(--accent-2);background:var(--amber-soft);animation:draft-blink 1.1s ease-in-out infinite;}
+.draft-ticker-count.ok{color:var(--ok);background:var(--ok-soft);animation:none;}
+.draft-ticker-count.idle{color:var(--muted-2);}
+@keyframes draft-ticker-scroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+@media (prefers-reduced-motion: reduce){
+  .draft-ticker-track{animation:none;flex-wrap:wrap;width:auto;white-space:normal;}
+  .draft-ticker-count.warn{animation:none;}
+}
+
+/* ============================================================
    Table — flat Linear-style list
    ============================================================ */
 .table-wrap{
@@ -500,10 +540,26 @@ tbody tr.drop-target td{border-bottom:2px solid var(--accent);}
   color:var(--text-muted);transition:background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 .row-menu-btn:hover{background:var(--card-hover);color:var(--text);}
-.draft-upload-btn.has-draft{color:var(--ok);position:relative;animation:draft-blink 1.4s ease-in-out infinite;}
-.draft-upload-btn.has-draft::after{content:"";position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:var(--ok);}
+.draft-upload-btn.has-draft{color:var(--muted-2);position:relative;}
+.draft-upload-btn.has-draft::after{content:"";position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:var(--muted-2);}
+.draft-upload-btn.has-draft.ok{color:var(--ok);}
+.draft-upload-btn.has-draft.ok::after{background:var(--ok);}
+.draft-upload-btn.has-draft.warn{color:var(--accent-2);animation:draft-blink 1.1s ease-in-out infinite;}
+.draft-upload-btn.has-draft.warn::after{background:var(--accent-2);}
+.draft-count{background:var(--muted-2);}
+.draft-count.ok{background:var(--ok);}
+.draft-count.warn{background:var(--accent-2);animation:draft-blink 1.1s ease-in-out infinite;}
+.draft-count.idle{background:var(--muted-2);}
+.draft-popup-count.ok{color:var(--ok)!important;font-weight:700!important;}
+.draft-popup-count.warn{color:var(--accent-2)!important;font-weight:700!important;animation:draft-blink 1.1s ease-in-out infinite;}
+.draft-popup-count.idle{color:var(--muted-2)!important;}
 @keyframes draft-blink{0%,100%{opacity:1;}50%{opacity:.25;}}
-@media (prefers-reduced-motion: reduce){.draft-upload-btn.has-draft{animation:none;}}
+@media (prefers-reduced-motion: reduce){
+  .draft-upload-btn.has-draft{animation:none;}
+  .draft-upload-btn.has-draft.warn{animation:none;}
+  .draft-count.warn{animation:none;}
+  .draft-popup-count.warn{animation:none;}
+}
 
 .rename-input{
   background:var(--surface-strong);border:1px solid var(--accent);border-radius:var(--radius-sm);
