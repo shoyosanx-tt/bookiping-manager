@@ -148,6 +148,7 @@
       uploaded: "Diunggah", provider: "Penyedia", confirmDeleteUpload: "Hapus video ini? Aksi tidak bisa dibatalkan.",
       draft: "Draft", draftVideo: "Video Draft", uploadDraft: "Unggah Draft", replaceDraft: "Ganti Draft", viewDraft: "Lihat Draft", noDraft: "Belum ada draft video",
       urgentDrafts: "Draft Mendesak", doFirst: "Kerjakan dulu", allDraftsDone: "Semua draft beres!", remaining: "sisa",
+      postLinkForDraft: "Link post draft ini", postLinkPlaceholder: "Tempel link post di sini…", openLink: "Buka link",
     },
     en: {
       tagline: "Job tracker for posting",
@@ -282,6 +283,7 @@
       uploaded: "Uploaded", provider: "Provider", confirmDeleteUpload: "Delete this video? This cannot be undone.",
       draft: "Draft", draftVideo: "Draft Video", uploadDraft: "Upload Draft", replaceDraft: "Replace Draft", viewDraft: "View Draft", noDraft: "No draft video yet",
       urgentDrafts: "Urgent Drafts", doFirst: "Do first", allDraftsDone: "All drafts done!", remaining: "left",
+      postLinkForDraft: "Post link for this draft", postLinkPlaceholder: "Paste post link here…", openLink: "Open link",
     },
     ms: {
       tagline: "Penjejak kerja untuk posting",
@@ -415,6 +417,7 @@
       uploaded: "Dimuat Naik", provider: "Pembekal", confirmDeleteUpload: "Padam video ini? Tindakan tidak boleh dibatalkan.",
       draft: "Draf", draftVideo: "Video Draf", uploadDraft: "Muat Naik Draf", replaceDraft: "Ganti Draf", viewDraft: "Lihat Draf", noDraft: "Belum ada video draf",
       urgentDrafts: "Draf Mendesak", doFirst: "Buat dahulu", allDraftsDone: "Semua draf siap!", remaining: "baki",
+      postLinkForDraft: "Pautan post draf ini", postLinkPlaceholder: "Tampal pautan post di sini…", openLink: "Buka pautan",
     },
     ja: {
       tagline: "ジョブトラッカー",
@@ -548,6 +551,7 @@
       uploaded: "アップロード済", provider: "プロバイダー", confirmDeleteUpload: "この動画を削除しますか？元に戻せません。",
       draft: "ドラフト", draftVideo: "ドラフト動画", uploadDraft: "ドラフトをアップロード", replaceDraft: "ドラフトを差し替え", viewDraft: "ドラフトを見る", noDraft: "ドラフト動画はまだありません",
       urgentDrafts: "緊急ドラフト", doFirst: "優先", allDraftsDone: "全ドラフト完了！", remaining: "残り",
+      postLinkForDraft: "このドラフトの投稿リンク", postLinkPlaceholder: "投稿リンクをここに貼り付け…", openLink: "リンクを開く",
     }
   };
 
@@ -2431,6 +2435,29 @@
     if (fl > 0 || dn > 0) return "warn";
     return "idle";
   }
+  // Link post dari draft → otomatis masuk ke job.links (post link job).
+  // Disimpan juga di draft.postLink + draft.postLinkIdx (penanda draft asal link).
+  function setDraftPostLink(job, draft, url) {
+    if (!job || !draft) return;
+    var links = Array.isArray(job.links) ? job.links : [];
+    var newUrl = (url || "").trim();
+    var oldUrl = (draft.postLink || "").trim();
+    if (oldUrl) {
+      for (var i = links.length - 1; i >= 0; i--) {
+        var l = links[i];
+        if (!l) continue;
+        if ((l.draftId && l.draftId === draft.id) || (l.url || "") === oldUrl) { links.splice(i, 1); break; }
+      }
+    }
+    if (newUrl) {
+      links.push({ url: newUrl, qty: 1, draftId: draft.id });
+      draft.postLinkIdx = links.length - 1;
+    } else {
+      draft.postLinkIdx = null;
+    }
+    draft.postLink = newUrl;
+    job.links = links;
+  }
   function renderUploadRow(u, idx) {
     var dl = u.url || u.pageUrl || "";
     var meta = (u.provider || "") + (u.size ? " \u00B7 " + formatBytes(u.size) : "") + (u.uploadedAt ? " \u00B7 " + new Date(u.uploadedAt).toLocaleString() : "");
@@ -2513,18 +2540,28 @@
           + '</div>';
       }
       const dl = d.url || d.pageUrl || "";
-      const meta = (d.provider || "") + (d.size ? ' \u00B7 ' + formatBytes(d.size) : '') + (d.uploadedAt ? ' \u00B7 ' + new Date(d.uploadedAt).toLocaleString() : '');
+      const meta = (d.provider || "") + (d.size ? ' · ' + formatBytes(d.size) : '') + (d.uploadedAt ? ' · ' + new Date(d.uploadedAt).toLocaleString() : '');
       const isDone = !!d.done;
-      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--accent-soft);border-radius:var(--radius-sm);min-width:0' + (isDone ? ';outline:1px solid var(--ok);opacity:.85' : '') + '">'
+      const main = '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--accent-soft);border-radius:var(--radius-sm);min-width:0' + (isDone ? ';outline:1px solid var(--ok);opacity:.85' : '') + '">'
         + '<input type="checkbox" class="draft-done-check" data-slot="' + idx + '" ' + (isDone ? 'checked' : '') + ' title="' + escapeAttr(_("done")) + '" style="width:16px;height:16px;accent-color:var(--ok);cursor:pointer;flex-shrink:0">'
         + '<span style="color:var(--accent);font-size:14px;flex-shrink:0">&#127909;</span>'
-        + '<div style="flex:1;min-width:0"><div title="' + escapeAttr(d.name || _("untitled")) + '" style="display:flex;align-items:baseline;gap:6px;min-width:0"><span style="font-size:12px;font-weight:600;flex-shrink:0;white-space:nowrap">' + (isDone ? '&#10003; ' : '') + escapeHtml(label) + ' \u00B7</span><span style="font-size:12px;font-weight:400;color:var(--text);flex:1;min-width:0;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' + (isDone ? ';text-decoration:line-through' : '') + '">' + escapeHtml(d.name || _("untitled")) + '</span></div>'
+        + '<div style="flex:1;min-width:0"><div title="' + escapeAttr(d.name || _("untitled")) + '" style="display:flex;align-items:baseline;gap:6px;min-width:0"><span style="font-size:12px;font-weight:600;flex-shrink:0;white-space:nowrap">' + (isDone ? '&#10003; ' : '') + escapeHtml(label) + ' ·</span><span style="font-size:12px;font-weight:400;color:var(--text);flex:1;min-width:0;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' + (isDone ? ';text-decoration:line-through' : '') + '">' + escapeHtml(d.name || _("untitled")) + '</span></div>'
         + (meta ? '<div style="font-size:10px;color:var(--muted-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(meta) + '</div>' : '')
         + '</div>'
         + (dl ? '<a href="' + escapeAttr(dl) + '" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size:11px;padding:5px 10px;text-decoration:none;flex-shrink:0">' + _("download") + '</a>' : '')
         + '<button class="draft-slot-replace btn btn-ghost" data-slot="' + idx + '" style="font-size:11px;padding:5px 10px;flex-shrink:0">' + escapeHtml(_("replaceDraft")) + '</button>'
         + '<button class="del-draft-btn btn btn-danger" data-slot="' + idx + '" style="font-size:11px;padding:5px 10px;flex-shrink:0">' + _("delete") + '</button>'
         + '</div>';
+      var linkRow = '';
+      if (isDone) {
+        var pl = d.postLink || "";
+        linkRow = '<div class="draft-postlink-row">'
+          + '<span class="draft-postlink-label">&#128279; ' + escapeHtml(_("postLinkForDraft")) + '</span>'
+          + '<input type="url" class="draft-postlink-input" data-slot="' + idx + '" value="' + escapeAttr(pl) + '" placeholder="' + escapeAttr(_("postLinkPlaceholder")) + '">'
+          + (pl ? '<a href="' + escapeAttr(pl) + '" target="_blank" rel="noopener" class="draft-postlink-open" title="' + escapeAttr(_("openLink")) + '">&#8599;</a>' : '')
+          + '</div>';
+      }
+      return '<div class="draft-slot">' + main + linkRow + '</div>';
     }
     function draftPriorityBanner(job, drafts, required, doneCount) {
       var remain = required - doneCount;
@@ -2559,7 +2596,7 @@
         html += draftSlotRow(drafts[i] || null, i);
       }
       html += '</div>';
-      html += '<div style="margin-top:8px;font-size:11px;color:var(--muted-2)">Qty job: ' + (Number(entry.job.jumlah) || 1) + ' \u2192 ' + required + ' slot draft \u00B7 ' + escapeHtml(_("done")) + ': ' + doneCount + '/' + required + '</div>';
+      html += '<div style="margin-top:8px;font-size:11px;color:var(--muted-2)">Qty job: ' + (Number(entry.job.jumlah) || 1) + ' \u2192 ' + required + ' slot draft \u00B7 ' + escapeHtml(_("done")) + ': ' + doneCount + '/' + required + ' \u00B7 ' + escapeHtml(_("postLink")) + ': ' + linkQtySum(entry.job.links || []) + '/' + required + '</div>';
       body.innerHTML = html;
       uploadBtn.disabled = false;
       if (drafts.length >= required) uploadBtn.textContent = _("uploadDraft") + ' +';
@@ -2598,18 +2635,40 @@
     fileInput.addEventListener('change', function() { const f = fileInput.files && fileInput.files[0]; if (f) runUpload(f, pendingSlot); pendingSlot = null; });
     body.addEventListener('change', function(e) {
       const chk = e.target.closest ? e.target.closest('.draft-done-check') : null;
-      if (!chk) return;
-      const entry = findJobEntry(jobId);
-      if (!entry) return;
-      var idx = parseInt(chk.dataset.slot, 10);
-      var list = getDraftVideos(entry.job);
-      if (idx >= 0 && idx < list.length) {
-        list[idx].done = chk.checked;
-        entry.job.draftVideos = list;
-        syncDraftLegacy(entry.job);
-        save(); renderTable();
+      if (chk) {
+        const entry = findJobEntry(jobId);
+        if (!entry) return;
+        var idx = parseInt(chk.dataset.slot, 10);
+        var list = getDraftVideos(entry.job);
+        if (idx >= 0 && idx < list.length) {
+          list[idx].done = chk.checked;
+          entry.job.draftVideos = list;
+          syncDraftLegacy(entry.job);
+          save(); renderTable();
+        }
+        renderDraft();
+        return;
       }
+      // input link post per draft → otomatis masuk ke post link job
+      const linkInp = e.target.closest ? e.target.closest('.draft-postlink-input') : null;
+      if (!linkInp) return;
+      const entry2 = findJobEntry(jobId);
+      if (!entry2) return;
+      var lidx = parseInt(linkInp.dataset.slot, 10);
+      var list2 = getDraftVideos(entry2.job);
+      if (!(lidx >= 0 && lidx < list2.length)) return;
+      setDraftPostLink(entry2.job, list2[lidx], linkInp.value);
+      entry2.job.draftVideos = list2;
+      syncDraftLegacy(entry2.job);
+      save(); renderTable();
       renderDraft();
+    });
+    body.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      const linkInp = e.target.closest ? e.target.closest('.draft-postlink-input') : null;
+      if (!linkInp) return;
+      e.preventDefault();
+      linkInp.blur();
     });
     body.addEventListener('click', function(e) {
       const up = e.target.closest('.draft-slot-upload') || e.target.closest('.draft-slot-replace');
@@ -3200,7 +3259,7 @@
       const no = nextNoFor(client);
       const createdAt = Date.now();
       songs.forEach((s, i) => {
-        const jobData = { id: uid(), no: no + i, ...shared, ...s, links: (shared.links || []).map(l => ({ url: l.url, qty: l.qty })), createdAt };
+        const jobData = { id: uid(), no: no + i, ...shared, ...s, links: (shared.links || []).map(l => ({ url: l.url, qty: l.qty, draftId: l.draftId })), createdAt };
         if (!jobData.deadline) jobData.deadline = shared.deadline;
         client.jobs.push(jobData);
       });

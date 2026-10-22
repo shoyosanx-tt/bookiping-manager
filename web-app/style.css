@@ -647,6 +647,20 @@ kbd{font:11px/1.4 var(--font-mono);background:var(--surface);padding:1px 5px;bor
 .modal-foot{display:flex;align-items:center;gap:8px;padding:14px 18px;border-top:1px solid var(--border-soft);flex:none;}
 .spacer{flex:1;}
 
+/* ===== Draft slot + input link post ===== */
+.draft-slot{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.draft-postlink-row{
+  display:flex;align-items:center;gap:6px;padding:6px 10px;
+  background:var(--ok-soft);border:1px solid var(--ok);border-radius:var(--radius-sm);
+}
+.draft-postlink-label{font-size:11px;font-weight:600;color:var(--ok);white-space:nowrap;flex:none;}
+.draft-postlink-input{
+  flex:1;min-width:0;font:11px var(--font-body);padding:4px 8px;border-radius:6px;
+  border:1px solid var(--border);background:var(--surface);color:var(--text);outline:none;
+}
+.draft-postlink-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:var(--surface-strong);}
+.draft-postlink-open{font-size:12px;color:var(--ok);text-decoration:none;flex:none;}
+
 .field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px;}
 .field label{font-size:12px;color:var(--text-muted);font-weight:500;}
 .field input,.field select,.field textarea{
